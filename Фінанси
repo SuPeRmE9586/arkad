@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Шлях Аркада</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f0d0a;color:#d4c9b0;font-family:system-ui,-apple-system,sans-serif;min-height:100vh;-webkit-tap-highlight-color:transparent}
+.app{max-width:440px;margin:0 auto;padding-bottom:68px;min-height:100vh}
+.hdr{padding:14px 14px 8px;background:#14110e;border-bottom:1px solid #222;position:sticky;top:0;z-index:100}
+.hdr-r{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}
+.hdr-t{font-size:16px;font-weight:800;color:#F1C40F}
+.hdr-s{font-size:11px;color:#6b6155;margin-top:1px}
+.hdr-b{display:flex;gap:6px}
+.bdg{background:#1a1612;padding:3px 8px;border-radius:12px;font-size:11px}
+.bdg-f{color:#E67E22}.bdg-g{color:#F1C40F}
+.xp-bar{height:3px;background:#222;border-radius:2px;overflow:hidden}
+.xp-fill{height:100%;background:linear-gradient(90deg,#B8860B,#F1C40F);border-radius:2px;transition:width .4s}
+.ct{padding:14px}
+.tip{background:#1a1612;padding:9px 12px;border-radius:8px;font-size:12px;color:#8a7d65;margin-bottom:14px;line-height:1.4}
+.sal{background:#1a1612;border-radius:12px;padding:14px;margin-bottom:14px;border:1px solid #222}
+.sal-h{display:flex;justify-content:space-between;margin-bottom:2px}
+.sal-l{font-size:13px;color:#8a7d65;font-weight:600}
+.sal-d{font-size:11px;color:#5a4d35}
+.sal-big{font-size:36px;font-weight:800;text-align:center;margin:8px 0;transition:color .3s}
+.sal-small{font-size:13px;color:#5a4d35;text-align:center;margin-bottom:8px}
+.sal-bk{display:flex;justify-content:center;gap:20px;margin-bottom:10px}
+.sal-tp{display:flex;align-items:center;gap:6px}
+.sal-tl{font-size:12px;color:#6b6155}
+.sal-ta{font-size:13px;font-weight:700}
+.btn-row{display:flex;gap:8px;margin-bottom:8px}
+.btn-add{flex:1;padding:10px;font-size:13px;font-weight:600;background:transparent;color:#F1C40F;border:1px dashed #3d3520;border-radius:8px;cursor:pointer;font-family:inherit}
+.btn-xfer{flex:1;padding:10px;font-size:13px;font-weight:600;background:transparent;color:#9B59B6;border:1px dashed #5a3d6e;border-radius:8px;cursor:pointer;font-family:inherit}
+.j-title{font-size:15px;font-weight:700;color:#F1C40F;margin-bottom:10px}
+.j-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
+.j-card{background:#1a1612;border-radius:10px;padding:12px 6px;border:1px solid #222;cursor:pointer;text-align:center;position:relative;font-family:inherit;color:#d4c9b0}
+.j-card:active{background:#222}
+.j-em{font-size:28px}
+.j-nm{font-size:11px;font-weight:600;margin:2px 0 4px}
+.j-am{font-size:18px;font-weight:800}
+.j-hb{position:absolute;top:4px;right:4px;background:none;border:none;font-size:12px;cursor:pointer;padding:2px}
+
+/* Goal jars */
+.goal-title{font-size:15px;font-weight:700;color:#E67E22;margin-bottom:10px;margin-top:4px}
+.goal-card{background:#1a1612;border-radius:12px;padding:14px;margin-bottom:10px;border:1px solid #2d1f0a;position:relative}
+.goal-card.done{opacity:.5;border-color:#222}
+.goal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.goal-name{font-size:14px;font-weight:700}
+.goal-badge{font-size:10px;background:#2d1f0a;color:#E67E22;padding:2px 8px;border-radius:10px;border:1px solid #3d2a0e}
+.goal-badge.done{background:#1a2a1a;color:#27AE60;border-color:#1e3a1e}
+.goal-amounts{display:flex;justify-content:space-between;margin-bottom:6px;font-size:12px}
+.goal-saved{color:#F1C40F;font-weight:700;font-size:16px}
+.goal-target{color:#5a4d35}
+.goal-bar{height:6px;background:#222;border-radius:3px;overflow:hidden;margin-bottom:10px}
+.goal-fill{height:100%;border-radius:3px;transition:width .4s}
+.goal-actions{display:flex;gap:8px}
+.goal-btn{flex:1;padding:8px;font-size:12px;font-weight:600;background:transparent;color:#E67E22;border:1px dashed #3d2a0e;border-radius:8px;cursor:pointer;font-family:inherit}
+.goal-done-btn{padding:8px 12px;font-size:12px;font-weight:600;background:transparent;color:#27AE60;border:1px solid #27AE60;border-radius:8px;cursor:pointer;font-family:inherit}
+.goal-check{font-size:24px;position:absolute;top:12px;right:12px}
+
+/* Income goal */
+.inc-goal{background:#1a1a12;border-radius:10px;padding:10px 12px;margin-bottom:14px;border:1px solid #2a2a12;display:flex;justify-content:space-between;align-items:center}
+.inc-goal-l{font-size:12px;color:#8a7d65}
+.inc-goal-r{font-size:14px;font-weight:700}
+
+.hist{background:#1a1612;border-radius:10px;padding:12px;margin-bottom:12px;border:1px solid #222}
+.hist-t{font-size:14px;font-weight:700;color:#F1C40F;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.hist-r{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #141210}
+.hist-a{font-size:14px;font-weight:700}
+.hist-c{font-size:12px;color:#8a7d65;margin-top:2px}
+.hist-d{font-size:10px;color:#5a4d35;margin-top:2px}
+.del{background:none;border:none;font-size:14px;cursor:pointer;padding:4px}
+.cls{background:none;border:none;color:#5a4d35;font-size:16px;cursor:pointer}
+.emp{color:#5a4d35;text-align:center;padding:16px;font-size:13px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;display:flex;align-items:flex-end;justify-content:center}
+.modal-c{background:#1a1612;border-radius:16px 16px 0 0;padding:20px 16px 28px;width:100%;max-width:440px}
+.modal-t{font-size:17px;font-weight:700;color:#F1C40F;text-align:center;margin-bottom:14px}
+.modal-i{width:100%;padding:12px;font-size:20px;font-weight:700;background:#0f0d0a;border:1px solid #222;border-radius:8px;color:#F1C40F;outline:none;margin-bottom:12px;box-sizing:border-box;font-family:inherit;text-align:center}
+.modal-i2{width:100%;padding:12px;font-size:14px;background:#0f0d0a;border:1px solid #222;border-radius:8px;color:#d4c9b0;outline:none;margin-bottom:12px;box-sizing:border-box;font-family:inherit;text-align:center}
+.modal-s{width:100%;padding:14px;font-size:16px;font-weight:700;background:#F1C40F;color:#0f0d0a;border:none;border-radius:10px;cursor:pointer;font-family:inherit}
+.modal-s:disabled{opacity:.4}
+.modal-s.orange{background:#E67E22;color:#fff}
+.tbtn-r{display:flex;gap:8px;margin-bottom:16px}
+.tbtn{flex:1;padding:10px;font-size:14px;font-weight:600;background:#0f0d0a;color:#6b6155;border:1px solid #222;border-radius:8px;cursor:pointer;font-family:inherit}
+.tbtn.on{background:#222;color:#F1C40F;border-color:#F1C40F}
+.qk-r{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.qk{padding:6px 12px;font-size:13px;background:#222;color:#8a7d65;border:none;border-radius:16px;cursor:pointer}
+.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:440px;display:flex;background:#0f0d0a;border-top:1px solid #222;z-index:100}
+.nav-b{flex:1;padding:7px 0;text-align:center;background:transparent;border:none;color:#5a4d35;cursor:pointer;font-family:inherit}
+.nav-b.on{background:#1a1612;color:#F1C40F}
+.nav-ic{font-size:18px}.nav-lb{font-size:9px;margin-top:2px}
+.toast{position:fixed;top:72px;left:50%;transform:translateX(-50%);background:#1a1612;color:#F1C40F;padding:8px 20px;border-radius:16px;font-weight:700;font-size:14px;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,.6);border:1px solid #3d3520;white-space:nowrap}
+.lvl-o{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:300;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.lvl-i{font-size:56px}.lvl-t{font-size:24px;font-weight:800;color:#F1C40F;margin-top:12px}.lvl-n{font-size:16px;color:#d4c9b0;margin-top:4px}
+.ob{min-height:100vh;background:#0f0d0a;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;color:#d4c9b0}
+.ob-t{font-size:26px;font-weight:800;color:#F1C40F;margin:0 0 6px}
+.ob-s{color:#6b6155;font-size:13px;line-height:1.5;margin:0 0 20px}
+.ob-c{background:#1a1612;border-radius:12px;padding:16px 14px;margin-bottom:16px;border:1px solid #2d2518;width:100%;max-width:320px}
+.ob-q{font-size:14px;font-style:italic;line-height:1.5;margin:0 0 6px}
+.ob-a{color:#F1C40F;font-size:12px;margin:0}
+.ob-b{background:#1a1612;border-radius:12px;padding:14px;margin-bottom:20px;border:1px solid #2d2518;text-align:left;width:100%;max-width:320px}
+.start{padding:14px 28px;font-size:17px;font-weight:700;background:#F1C40F;color:#0f0d0a;border:none;border-radius:10px;cursor:pointer;width:100%;max-width:320px}
+.sc{background:#1a1612;border-radius:12px;padding:14px;margin-bottom:16px;border:1px solid #222}
+.sc-t{font-size:15px;font-weight:700;color:#F1C40F;text-align:center;margin-bottom:10px}
+.sc-g{display:flex;justify-content:space-around}
+.sc-v{font-size:18px;font-weight:800}.sc-l{font-size:10px;color:#5a4d35;margin-top:3px}
+.sec{font-size:15px;font-weight:700;color:#F1C40F;margin-bottom:10px}
+.mb{height:5px;background:#222;border-radius:3px;overflow:hidden}
+.mbf{height:100%;border-radius:3px;transition:width .4s}
+.cat-row{margin-bottom:10px;cursor:pointer;padding:8px;border-radius:8px;transition:background .2s}
+.cat-row:active{background:#222}
+.cat-detail{background:#141210;border-radius:8px;padding:10px;margin-top:6px;margin-bottom:4px}
+.cat-detail-r{padding:6px 0;border-bottom:1px solid #1a1612;display:flex;justify-content:space-between;align-items:center}
+.cat-detail-r:last-child{border:none}
+.cal-t{font-size:17px;font-weight:700;color:#F1C40F;text-align:center;margin-bottom:12px}
+.cal-g{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:14px}
+.cal-dn{text-align:center;font-size:10px;color:#5a4d35;font-weight:600;padding:3px 0}
+.cal-d{aspect-ratio:1;background:#1a1612;border-radius:6px;border:1px solid #222;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#d4c9b0;font-family:inherit;padding:0}
+.cal-d.today{border:2px solid #F1C40F}
+.cal-d.has{background:#1a2a1a}
+.cal-d.sel{border-color:#d4c9b0}
+.wl{font-size:11px;font-weight:700;color:#5a4d35;margin-top:14px;margin-bottom:6px;text-transform:uppercase;letter-spacing:2px}
+.qcard{background:#1a1612;border-radius:8px;margin-bottom:6px;border:1px solid #222;overflow:hidden}
+.qm{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer}
+.qch{width:22px;height:22px;border-radius:11px;border:2px solid #5a4d35;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:800;flex-shrink:0}
+.qch.done{background:#27AE60;border-color:#27AE60}
+.qbtn{margin-top:10px;padding:10px;background:#27AE60;color:#fff;border:none;border-radius:6px;font-weight:700;font-size:14px;cursor:pointer;width:100%;font-family:inherit}
+.rbtn{margin-top:28px;padding:10px;background:transparent;color:#5a4d35;border:1px solid #222;border-radius:6px;font-size:12px;cursor:pointer;width:100%;font-family:inherit}
+.dd{background:#1a1612;border-radius:10px;padding:12px;border:1px solid #222}
+.pay-label{text-align:center;font-size:12px;color:#8a7d65;margin-bottom:4px}
+.month-tabs{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px}
+.month-tab{padding:6px 14px;font-size:12px;font-weight:600;background:#1a1612;color:#6b6155;border:1px solid #222;border-radius:16px;cursor:pointer;white-space:nowrap;font-family:inherit}
+.month-tab.on{background:#222;color:#F1C40F;border-color:#F1C40F}
+.deadline-bar{background:#1a1a12;border-radius:10px;padding:10px 14px;margin-bottom:14px;border:1px solid #2a2a12;display:flex;justify-content:space-between;align-items:center}
+.deadline-l{font-size:12px;color:#8a7d65}
+.deadline-r{font-size:14px;font-weight:700;color:#E67E22}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script type="text/babel">
+const{useState,useEffect}=React;
+
+const JARS=[
+  {id:"car",name:"Машина",emoji:"🚗",color:"#9B59B6"},
+  {id:"base",name:"Базові",emoji:"🏠",color:"#E67E22"},
+  {id:"personal",name:"Мої",emoji:"🎮",color:"#3498DB"},
+  {id:"couple",name:"Удвох",emoji:"💑",color:"#E74C3C"},
+];
+
+const GOALS_INIT=[
+  {id:"apt",name:"Квартира",emoji:"🏢",target:3100,saved:0,done:false,color:"#27AE60"},
+  {id:"ins",name:"Страхування",emoji:"🛡️",target:2750,saved:0,done:false,color:"#3498DB"},
+  {id:"dima",name:"Діма за машину",emoji:"🔑",target:2200,saved:0,done:false,color:"#E67E22"},
+];
+
+const QUESTS=[
+  {id:1,title:"Закрити квартиру",desc:"Накопич і заплати 3100 zł за квартиру до червня",xp:300,goalId:"apt"},
+  {id:2,title:"Закрити страхування",desc:"Накопич і заплати 2750 zł за страхування машини до червня",xp:250,goalId:"ins"},
+  {id:3,title:"Розрахуватись з Дімою",desc:"Накопич і віддай 2200 zł Дімі за машину до червня",xp:200,goalId:"dima"},
+  {id:4,title:"Тиждень 2700+",desc:"Заробити 2700 zł або більше за один тиждень",xp:150,goalId:null},
+  {id:5,title:"Три тижні 2700+",desc:"Заробити 2700 zł або більше три тижні поспіль",xp:250,goalId:null},
+  {id:6,title:"Закрити всі цілі",desc:"Виконати всі три фінансові цілі до червня 2026",xp:500,goalId:null},
+];
+
+const LEVELS=[
+  {lv:1,title:"Початківець",xp:0,ic:"🌱"},{lv:2,title:"Ощадливий",xp:200,ic:"💰"},
+  {lv:3,title:"Дисциплінований",xp:500,ic:"⚔️"},{lv:4,title:"Стратег",xp:900,ic:"🏛️"},
+  {lv:5,title:"Майстер фінансів",xp:1500,ic:"👑"},
+];
+
+const TIPS=["«Частину всіх грошей, що заробляєш — залиш собі» — Аркад","Контролюй витрати щодня — так ціль ближча","Кожна злотна в банку — крок до свободи","Дисципліна сьогодні — свобода завтра","Готівка яку не записав — готівка яку втратив","Маленькі кроки щодня = великий результат до червня"];
+const MN=["Січень","Лютий","Березень","Квітень","Травень","Червень","Липень","Серпень","Вересень","Жовтень","Листопад","Грудень"];
+const DN=["Пн","Вт","Ср","Чт","Пт","Сб","Нд"];
+const KEY="arkad_v7";
+const INCOME_GOAL=2700;
+const DEADLINE=new Date(2026,5,1); // June 1, 2026
+
+function mon(d){const x=new Date(d);const dy=x.getDay();x.setDate(x.getDate()-dy+(dy===0?-6:1));x.setHours(0,0,0,0);return x;}
+function sun(d){const m=mon(d);m.setDate(m.getDate()+6);m.setHours(23,59,59,999);return m;}
+function fmt(d){return d.getDate().toString().padStart(2,"0")+"."+(d.getMonth()+1).toString().padStart(2,"0");}
+function r2(n){return Math.round(n*100)/100;}
+function parseNum(s){if(!s)return 0;return parseFloat(s.replace(",","."))||0;}
+function fmtN(n){return Number.isInteger(n)?n.toString():n.toFixed(2);}
+function daysLeft(){const now=new Date();const diff=DEADLINE-now;return Math.max(0,Math.ceil(diff/(1000*60*60*24)));}
+
+const INIT={incomes:[],allocs:[],goalAllocs:[],goals:GOALS_INIT,xp:0,doneQ:[],transfers:[]};
+
+function load(){try{const s=localStorage.getItem(KEY);if(s){const d=JSON.parse(s);if(!d.goalAllocs)d.goalAllocs=[];if(!d.goals)d.goals=GOALS_INIT;return d;}return null;}catch{return null;}}
+function save(d){try{localStorage.setItem(KEY,JSON.stringify(d));}catch{}}
+
+function App(){
+  const[data,setData]=useState(()=>load()||null);
+  const[tab,setTab]=useState("main");
+  const[incModal,setIncModal]=useState(false);
+  const[incAmt,setIncAmt]=useState("");
+  const[incType,setIncType]=useState("cash");
+  const[jarModal,setJarModal]=useState(null);
+  const[jarAmt,setJarAmt]=useState("");
+  const[jarCom,setJarCom]=useState("");
+  const[jarPay,setJarPay]=useState("cash");
+  const[goalModal,setGoalModal]=useState(null);
+  const[goalAmt,setGoalAmt]=useState("");
+  const[goalPay,setGoalPay]=useState("cash");
+  const[xferModal,setXferModal]=useState(false);
+  const[xferAmt,setXferAmt]=useState("");
+  const[xferDir,setXferDir]=useState("cash2card");
+  const[questOpen,setQuestOpen]=useState(null);
+  const[selDay,setSelDay]=useState(null);
+  const[jarHist,setJarHist]=useState(null);
+  const[lvlUp,setLvlUp]=useState(false);
+  const[toast,setToast]=useState("");
+  const[openCat,setOpenCat]=useState(null);
+  const[statMonth,setStatMonth]=useState(new Date().getMonth());
+
+  const now=new Date();
+  const wS=mon(now);
+  const wE=sun(now);
+
+  useEffect(()=>{if(data)save(data);},[data]);
+
+  // ALL income (not just this week) - for carry-over balance
+  function totalIncome(){return r2((data?data.incomes:[]).reduce((s,i)=>s+i.amount,0));}
+  function totalAllocsRegular(){return r2((data?data.allocs:[]).reduce((s,a)=>s+a.amount,0));}
+  function totalAllocsGoal(){return r2((data?data.goalAllocs||[]:[]).reduce((s,a)=>s+a.amount,0));}
+  function totalAllocAll(){return r2(totalAllocsRegular()+totalAllocsGoal());}
+
+  // Weekly income
+  function wInc(type){return r2((data?data.incomes:[]).filter(i=>{const d=new Date(i.date);return d>=wS&&d<=wE&&(type?i.type===type:true);}).reduce((s,i)=>s+i.amount,0));}
+
+  // Weekly allocs by jar
+  function wAll(jid){return r2((data?data.allocs:[]).filter(a=>{const d=new Date(a.date);return a.jarId===jid&&d>=wS&&d<=wE;}).reduce((s,a)=>s+a.amount,0));}
+
+  // All-time allocs from source (for carry-over)
+  function totalAllocFrom(src){
+    const reg=r2((data?data.allocs:[]).filter(a=>a.payFrom===src).reduce((s,a)=>s+a.amount,0));
+    const goal=r2((data?data.goalAllocs||[]:[]).filter(a=>a.payFrom===src).reduce((s,a)=>s+a.amount,0));
+    return r2(reg+goal);
+  }
+
+  // Transfers totals
+  const allXfers=data?data.transfers||[]:[];
+  const allC2C=r2(allXfers.filter(t=>t.dir==="cash2card").reduce((s,t)=>s+t.amount,0));
+  const allCC2=r2(allXfers.filter(t=>t.dir==="card2cash").reduce((s,t)=>s+t.amount,0));
+
+  // Total cash/card income
+  const totalCashInc=r2((data?data.incomes:[]).filter(i=>i.type==="cash").reduce((s,i)=>s+i.amount,0));
+  const totalCardInc=r2((data?data.incomes:[]).filter(i=>i.type==="card").reduce((s,i)=>s+i.amount,0));
+
+  // Running balance (carry-over)
+  const cashBal=r2(totalCashInc-totalAllocFrom("cash")-allC2C+allCC2);
+  const cardBal=r2(totalCardInc-totalAllocFrom("card")+allC2C-allCC2);
+  const remaining=r2(cashBal+cardBal);
+
+  // Weekly
+  const totalWI=wInc(null);
+
+  // Monthly stats
+  function mInc(month){return r2((data?data.incomes:[]).filter(i=>{const d=new Date(i.date);return d.getMonth()===month&&d.getFullYear()===now.getFullYear();}).reduce((s,i)=>s+i.amount,0));}
+  function mAllocs(month){return r2((data?data.allocs:[]).filter(a=>{const d=new Date(a.date);return d.getMonth()===month&&d.getFullYear()===now.getFullYear();}).reduce((s,a)=>s+a.amount,0));}
+  function mAllocsJar(jid,month){return r2((data?data.allocs:[]).filter(a=>{const d=new Date(a.date);return a.jarId===jid&&d.getMonth()===month&&d.getFullYear()===now.getFullYear();}).reduce((s,a)=>s+a.amount,0));}
+  function mAllocsDetail(jid,month){return(data?data.allocs:[]).filter(a=>{const d=new Date(a.date);return a.jarId===jid&&d.getMonth()===month&&d.getFullYear()===now.getFullYear();}).sort((a,b)=>new Date(b.date)-new Date(a.date));}
+
+  // Goal saved
+  function goalSaved(gid){return r2((data?data.goalAllocs||[]:[]).filter(a=>a.goalId===gid).reduce((s,a)=>s+a.amount,0));}
+
+  const curLvl=LEVELS.reduce((a,l)=>((data?data.xp:0)>=l.xp?l:a),LEVELS[0]);
+  const nxtLvl=LEVELS.find(l=>l.xp>(data?data.xp:0))||LEVELS[LEVELS.length-1];
+  const xpPct=nxtLvl.xp>curLvl.xp?(((data?data.xp:0)-curLvl.xp)/(nxtLvl.xp-curLvl.xp))*100:100;
+
+  const streak=(()=>{if(!data)return 0;let s=0;const d=new Date(now);while(true){const ds=d.toISOString().split("T")[0];if(data.allocs.some(a=>a.date.split("T")[0]===ds)||data.incomes.some(i=>i.date.split("T")[0]===ds)){s++;d.setDate(d.getDate()-1);}else break;}return s;})();
+
+  function doXP(n){if(!data)return n;const old=LEVELS.reduce((a,l)=>(data.xp>=l.xp?l:a),LEVELS[0]);const nx=data.xp+n;const nw=LEVELS.reduce((a,l)=>(nx>=l.xp?l:a),LEVELS[0]);if(nw.lv>old.lv){setLvlUp(true);setTimeout(()=>setLvlUp(false),2500);}return nx;}
+  function showT(m){setToast(m);setTimeout(()=>setToast(""),1800);}
+
+  function addIncome(){const a=parseNum(incAmt);if(!a||a<=0)return;const nx=doXP(15);setData(p=>({...p,incomes:[...p.incomes,{id:Date.now(),amount:r2(a),type:incType,date:new Date().toISOString()}],xp:nx}));setIncAmt("");setIncModal(false);showT("💵 +"+fmtN(r2(a))+" zł");}
+
+  function allocate(){
+    const a=parseNum(jarAmt);if(!a||a<=0||!jarModal)return;
+    const srcBal=jarPay==="cash"?cashBal:cardBal;
+    if(a>srcBal){showT("❌ Не вистачає на "+(jarPay==="cash"?"готівці":"карті")+"!");return;}
+    const nx=doXP(10);
+    setData(p=>({...p,allocs:[...p.allocs,{id:Date.now(),jarId:jarModal,amount:r2(a),comment:jarCom,payFrom:jarPay,date:new Date().toISOString()}],xp:nx}));
+    setJarAmt("");setJarCom("");setJarModal(null);showT("✓ В банку!");}
+
+  function allocateGoal(){
+    const a=parseNum(goalAmt);if(!a||a<=0||!goalModal)return;
+    const srcBal=goalPay==="cash"?cashBal:cardBal;
+    if(a>srcBal){showT("❌ Не вистачає на "+(goalPay==="cash"?"готівці":"карті")+"!");return;}
+    const nx=doXP(15);
+    setData(p=>({...p,goalAllocs:[...(p.goalAllocs||[]),{id:Date.now(),goalId:goalModal,amount:r2(a),payFrom:goalPay,date:new Date().toISOString()}],xp:nx}));
+    setGoalAmt("");setGoalModal(null);showT("🎯 В ціль!");}
+
+  function markGoalDone(gid){
+    setData(p=>({...p,goals:p.goals.map(g=>g.id===gid?{...g,done:true}:g)}));
+    showT("✅ Ціль виконана!");}
+
+  function doTransfer(){const a=parseNum(xferAmt);if(!a||a<=0)return;setData(p=>({...p,transfers:[...(p.transfers||[]),{id:Date.now(),amount:r2(a),dir:xferDir,date:new Date().toISOString()}]}));setXferAmt("");setXferModal(false);showT("↔ Переказ "+fmtN(r2(a))+" zł");}
+
+  function delAlloc(id){setData(p=>({...p,allocs:p.allocs.filter(a=>a.id!==id)}));}
+  function delGoalAlloc(id){setData(p=>({...p,goalAllocs:(p.goalAllocs||[]).filter(a=>a.id!==id)}));}
+  function delInc(id){setData(p=>({...p,incomes:p.incomes.filter(i=>i.id!==id)}));}
+  function doQuest(qid){if(data.doneQ.includes(qid))return;const q=QUESTS.find(x=>x.id===qid);const nx=doXP(q.xp);setData(p=>({...p,doneQ:[...p.doneQ,qid],xp:nx}));}
+  function resetAll(){if(confirm("Видалити ВСІ дані?")){localStorage.removeItem(KEY);setData({...INIT,goals:GOALS_INIT.map(g=>({...g}))});}}
+
+  const dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  const fd=new Date(now.getFullYear(),now.getMonth(),1).getDay();
+  const af=fd===0?6:fd-1;
+  const dayA=(day)=>(data?data.allocs:[]).filter(a=>{const d=new Date(a.date);return d.getDate()===day&&d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();});
+  const dayT=(day)=>r2(dayA(day).reduce((s,a)=>s+a.amount,0));
+  const jHist=(jid)=>(data?data.allocs:[]).filter(a=>a.jarId===jid).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,30);
+  const tip=TIPS[now.getDate()%TIPS.length];
+  const dl=daysLeft();
+
+  // Available months for stats
+  const availMonths=[];
+  if(data){
+    const allDates=[...data.incomes,...data.allocs].map(x=>new Date(x.date).getMonth());
+    for(let m=0;m<12;m++){if(allDates.includes(m)||m===now.getMonth())availMonths.push(m);}
+  }
+
+  if(!data)return(
+    <div className="ob">
+      <div style={{fontSize:56,marginBottom:12}}>🏛️</div>
+      <h1 className="ob-t">Шлях Аркада</h1>
+      <p className="ob-s">Розподіляй зарплату по банках<br/>та закрий всі цілі до червня 2026</p>
+      <div className="ob-c"><p className="ob-q">«Частину всіх грошей, що заробляєш — залиш собі»</p><p className="ob-a">— Аркад</p></div>
+      <div className="ob-b">
+        <div style={{color:"#F1C40F",fontSize:11,letterSpacing:2,marginBottom:8}}>ЦІЛІ ДО ЧЕРВНЯ</div>
+        {GOALS_INIT.map(g=><div key={g.id} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",fontSize:13}}><span>{g.emoji} {g.name}</span><span style={{color:g.color,fontWeight:700}}>{g.target} zł</span></div>)}
+        <div style={{marginTop:10,paddingTop:8,borderTop:"1px solid #2d2518",display:"flex",justifyContent:"space-between",fontSize:12,color:"#8a7d65"}}><span>Загалом:</span><span style={{color:"#E67E22",fontWeight:700}}>8 050 zł</span></div>
+      </div>
+      <button className="start" onClick={()=>setData({...INIT,goals:GOALS_INIT.map(g=>({...g}))})}>⚔️ Почати подорож</button>
+    </div>
+  );
+
+  const goals=data.goals||GOALS_INIT;
+  const activeGoals=goals.filter(g=>!g.done);
+  const doneGoals=goals.filter(g=>g.done);
+  const totalGoalTarget=goals.reduce((s,g)=>s+g.target,0);
+  const totalGoalSaved=goals.reduce((s,g)=>s+goalSaved(g.id),0);
+
+  return(
+    <div className="app">
+      {lvlUp&&<div className="lvl-o"><div className="lvl-i">{curLvl.ic}</div><div className="lvl-t">Новий рівень!</div><div className="lvl-n">{curLvl.title}</div></div>}
+      {toast&&<div className="toast">{toast}</div>}
+
+      <div className="hdr">
+        <div className="hdr-r"><div><div className="hdr-t">🏛️ Шлях Аркада</div><div className="hdr-s">{curLvl.ic} {curLvl.title}</div></div><div className="hdr-b"><span className="bdg bdg-f">🔥{streak}</span><span className="bdg bdg-g">{data.xp}xp</span></div></div>
+        <div className="xp-bar"><div className="xp-fill" style={{width:xpPct+"%"}}/></div>
+      </div>
+
+      <div className="ct">
+        {/* ══ MAIN ══ */}
+        {tab==="main"&&<>
+          <div className="tip">📜 {tip}</div>
+
+          {/* Deadline */}
+          <div className="deadline-bar">
+            <span className="deadline-l">⏳ До червня 2026</span>
+            <span className="deadline-r">{dl} днів</span>
+          </div>
+
+          {/* Balance */}
+          <div className="sal">
+            <div className="sal-h"><span className="sal-l">Загальний баланс</span><span className="sal-d">Тиждень: {fmt(wS)}–{fmt(wE)}</span></div>
+            <div className="sal-big" style={{color:remaining<0?"#FF6B6B":remaining===0?"#27AE60":"#F1C40F"}}>{fmtN(remaining)} zł</div>
+            <div className="sal-small">Всього отримано: {fmtN(totalIncome())} zł · Витрачено: {fmtN(totalAllocAll())} zł</div>
+            <div className="sal-bk">
+              <div className="sal-tp"><span>💵</span><span className="sal-tl">Готівка</span><span className="sal-ta" style={{color:cashBal<0?"#FF6B6B":"#d4c9b0"}}>{fmtN(cashBal)} zł</span></div>
+              <div className="sal-tp"><span>💳</span><span className="sal-tl">Карта</span><span className="sal-ta" style={{color:cardBal<0?"#FF6B6B":"#d4c9b0"}}>{fmtN(cardBal)} zł</span></div>
+            </div>
+
+            {/* Weekly income vs goal */}
+            <div className="inc-goal" style={{background:"#141210",borderRadius:8,padding:"8px 10px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",border:"1px solid #1a1a12"}}>
+              <span style={{fontSize:12,color:"#8a7d65"}}>📈 Цей тиждень</span>
+              <span style={{fontSize:13,fontWeight:700,color:totalWI>=INCOME_GOAL?"#27AE60":totalWI>0?"#F1C40F":"#5a4d35"}}>{fmtN(totalWI)} / {INCOME_GOAL} zł</span>
+            </div>
+
+            <div className="btn-row">
+              <button className="btn-add" onClick={()=>setIncModal(true)}>+ Дохід</button>
+              <button className="btn-xfer" onClick={()=>setXferModal(true)}>↔ Переказ</button>
+            </div>
+          </div>
+
+          {/* Regular Jars */}
+          <div className="j-title">Банки</div>
+          <div className="j-grid">
+            {JARS.map(j=>{const sp=wAll(j.id);return(
+              <button key={j.id} className="j-card" onClick={()=>{setJarModal(j.id);setJarAmt("");setJarCom("");setJarPay("cash");}}>
+                <div className="j-em">{j.emoji}</div>
+                <div className="j-nm">{j.name}</div>
+                <div className="j-am" style={{color:j.color}}>{fmtN(sp)} zł</div>
+                <span className="j-hb" onClick={e=>{e.stopPropagation();setJarHist(jarHist===j.id?null:j.id);}}>📋</span>
+              </button>);})}
+          </div>
+
+          {jarHist&&<div className="hist">
+            <div className="hist-t"><span>{JARS.find(j=>j.id===jarHist)?.emoji} {JARS.find(j=>j.id===jarHist)?.name}</span><button className="cls" onClick={()=>setJarHist(null)}>✕</button></div>
+            {jHist(jarHist).length===0?<div className="emp">Поки пусто</div>:jHist(jarHist).map(a=>(
+              <div key={a.id} className="hist-r"><div><div className="hist-a">{a.payFrom==="cash"?"💵":"💳"} {fmtN(a.amount)} zł</div>{a.comment&&<div className="hist-c">{a.comment}</div>}<div className="hist-d">{new Date(a.date).toLocaleDateString("uk-UA",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</div></div><button className="del" onClick={()=>delAlloc(a.id)}>🗑️</button></div>))}
+          </div>}
+
+          {/* Goal Jars */}
+          <div className="goal-title">🎯 Цілі до червня ({fmtN(r2(totalGoalSaved))} / {totalGoalTarget} zł)</div>
+
+          {activeGoals.map(g=>{
+            const saved=goalSaved(g.id);
+            const pct=Math.min((saved/g.target)*100,100);
+            const gAllocs=(data.goalAllocs||[]).filter(a=>a.goalId===g.id).sort((a,b)=>new Date(b.date)-new Date(a.date));
+            return(
+            <div key={g.id} className="goal-card">
+              <div className="goal-header">
+                <span className="goal-name">{g.emoji} {g.name}</span>
+                <span className="goal-badge">{Math.round(pct)}%</span>
+              </div>
+              <div className="goal-amounts">
+                <span className="goal-saved">{fmtN(saved)} zł</span>
+                <span className="goal-target">з {g.target} zł</span>
+              </div>
+              <div className="goal-bar"><div className="goal-fill" style={{width:pct+"%",backgroundColor:g.color}}/></div>
+              <div className="goal-actions">
+                <button className="goal-btn" onClick={()=>{setGoalModal(g.id);setGoalAmt("");setGoalPay("cash");}}>+ Поповнити</button>
+                {saved>=g.target&&<button className="goal-done-btn" onClick={()=>markGoalDone(g.id)}>✓ Виконано</button>}
+              </div>
+              {gAllocs.length>0&&<div style={{marginTop:8,borderTop:"1px solid #222",paddingTop:8}}>
+                {gAllocs.slice(0,3).map(a=>(
+                  <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",fontSize:12}}>
+                    <span style={{color:"#8a7d65"}}>{a.payFrom==="cash"?"💵":"💳"} {fmtN(a.amount)} zł — {new Date(a.date).toLocaleDateString("uk-UA",{day:"numeric",month:"short"})}</span>
+                    <button className="del" style={{fontSize:11}} onClick={()=>delGoalAlloc(a.id)}>🗑️</button>
+                  </div>))}
+              </div>}
+            </div>);})}
+
+          {doneGoals.length>0&&doneGoals.map(g=>(
+            <div key={g.id} className="goal-card done">
+              <div className="goal-header">
+                <span className="goal-name">{g.emoji} {g.name}</span>
+                <span className="goal-badge done">✓ Виконано</span>
+              </div>
+              <div style={{fontSize:12,color:"#5a4d35"}}>Накопичено: {fmtN(goalSaved(g.id))} / {g.target} zł</div>
+            </div>))}
+
+          {/* Incomes this week */}
+          {data.incomes.filter(i=>{const d=new Date(i.date);return d>=wS&&d<=wE;}).length>0&&<div className="hist">
+            <div className="hist-t">💰 Доходи тижня</div>
+            {[...data.incomes].filter(i=>{const d=new Date(i.date);return d>=wS&&d<=wE;}).reverse().map(i=>(
+              <div key={i.id} className="hist-r"><div><div className="hist-a">{i.type==="cash"?"💵":"💳"} +{fmtN(i.amount)} zł</div><div className="hist-d">{new Date(i.date).toLocaleDateString("uk-UA",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</div></div><button className="del" onClick={()=>delInc(i.id)}>🗑️</button></div>))}
+          </div>}
+        </>}
+
+        {/* ══ STATS ══ */}
+        {tab==="stats"&&<>
+          <div className="month-tabs">
+            {(availMonths.length>0?availMonths:[now.getMonth()]).map(m=>(
+              <button key={m} className={"month-tab"+(statMonth===m?" on":"")} onClick={()=>setStatMonth(m)}>{MN[m]}</button>))}
+          </div>
+          <div className="sc">
+            <div className="sc-t">{MN[statMonth]} {now.getFullYear()}</div>
+            <div className="sc-g">
+              <div style={{textAlign:"center"}}><div className="sc-v">{fmtN(mInc(statMonth))} zł</div><div className="sc-l">Дохід</div></div>
+              <div style={{textAlign:"center"}}><div className="sc-v" style={{color:"#FF6B6B"}}>{fmtN(mAllocs(statMonth))} zł</div><div className="sc-l">Витрати</div></div>
+              <div style={{textAlign:"center"}}><div className="sc-v" style={{color:"#27AE60"}}>{fmtN(r2(mInc(statMonth)-mAllocs(statMonth)))} zł</div><div className="sc-l">Залишок</div></div>
+            </div>
+          </div>
+
+          <div className="sec">По банках</div>
+          {JARS.map(j=>{const m=mAllocsJar(j.id,statMonth);const details=mAllocsDetail(j.id,statMonth);const isOpen=openCat===j.id;return(
+            <div key={j.id}>
+              <div className="cat-row" onClick={()=>setOpenCat(isOpen?null:j.id)}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                  <span style={{fontSize:14}}>{j.emoji} {j.name} <span style={{fontSize:11,color:"#5a4d35"}}>{isOpen?"▲":"▼"}</span></span>
+                  <span style={{color:j.color,fontSize:14,fontWeight:700}}>{fmtN(m)} zł</span>
+                </div>
+                <div className="mb"><div className="mbf" style={{width:Math.min(m/100*10,100)+"%",backgroundColor:j.color}}/></div>
+              </div>
+              {isOpen&&<div className="cat-detail">
+                {details.length===0?<div className="emp">Немає записів</div>:details.map(a=>(
+                  <div key={a.id} className="cat-detail-r">
+                    <div><div style={{fontSize:13,fontWeight:600}}>{a.payFrom==="cash"?"💵":"💳"} {fmtN(a.amount)} zł</div>{a.comment&&<div style={{fontSize:11,color:"#8a7d65",marginTop:2}}>{a.comment}</div>}<div style={{fontSize:10,color:"#5a4d35",marginTop:2}}>{new Date(a.date).toLocaleDateString("uk-UA",{day:"numeric",month:"long"})}</div></div>
+                    <button className="del" onClick={()=>delAlloc(a.id)}>🗑️</button>
+                  </div>))}
+              </div>}
+            </div>);})}
+
+          <div className="sec" style={{marginTop:16}}>Цілі — загальний прогрес</div>
+          {goals.map(g=>{const saved=goalSaved(g.id);const pct=Math.min((saved/g.target)*100,100);return(
+            <div key={g.id} style={{marginBottom:10,padding:"10px 12px",background:"#1a1612",borderRadius:10,border:"1px solid #222"}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                <span style={{fontSize:13}}>{g.emoji} {g.name} {g.done?"✅":""}</span>
+                <span style={{color:g.color,fontWeight:700,fontSize:13}}>{fmtN(saved)} / {g.target} zł</span>
+              </div>
+              <div className="mb"><div className="mbf" style={{width:pct+"%",backgroundColor:g.color}}/></div>
+            </div>);})}
+        </>}
+
+        {/* ══ CALENDAR ══ */}
+        {tab==="cal"&&<>
+          <div className="cal-t">{MN[now.getMonth()]} {now.getFullYear()}</div>
+          <div className="cal-g">
+            {DN.map(d=><div key={d} className="cal-dn">{d}</div>)}
+            {Array(af).fill(null).map((_,i)=><div key={"e"+i}/>)}
+            {Array(dim).fill(null).map((_,i)=>{const d=i+1;const t=dayT(d);const isT=d===now.getDate();const has=dayA(d).length>0;
+              return<button key={d} className={"cal-d"+(isT?" today":"")+(has?" has":"")+(selDay===d?" sel":"")} onClick={()=>setSelDay(selDay===d?null:d)}>
+                <div style={{fontSize:13,fontWeight:600}}>{d}</div>
+                {has&&<div style={{fontSize:9,color:"#27AE60",fontWeight:700}}>{fmtN(t)}</div>}
+              </button>;})}
+          </div>
+          {selDay&&<div className="dd"><div style={{color:"#F1C40F",fontWeight:700,marginBottom:8}}>{selDay} {MN[now.getMonth()]}</div>
+            {dayA(selDay).length===0?<div className="emp">Немає записів</div>:dayA(selDay).map(a=>{const j=JARS.find(x=>x.id===a.jarId);return(
+              <div key={a.id} className="hist-r"><div><span style={{fontSize:16}}>{j?.emoji}</span> <span style={{fontWeight:600}}>{a.payFrom==="cash"?"💵":"💳"} {fmtN(a.amount)} zł</span>{a.comment&&<span style={{color:"#5a4d35",marginLeft:8,fontSize:12}}>— {a.comment}</span>}</div><button className="del" onClick={()=>delAlloc(a.id)}>🗑️</button></div>);})}
+          </div>}
+        </>}
+
+        {/* ══ QUESTS ══ */}
+        {tab==="quests"&&<>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div className="sec">Квести до червня</div><span style={{color:"#8a7d65",fontSize:13}}>{data.doneQ.length}/{QUESTS.length}</span></div>
+          <div style={{background:"#1a1a12",borderRadius:10,padding:"10px 12px",marginBottom:14,border:"1px solid #2a2a12"}}>
+            <div style={{fontSize:11,color:"#5a4d35",marginBottom:4}}>ЗАГАЛЬНИЙ ПРОГРЕС</div>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+              <span style={{fontSize:13,color:"#8a7d65"}}>Цілей накопичено</span>
+              <span style={{fontSize:13,fontWeight:700,color:"#E67E22"}}>{fmtN(r2(totalGoalSaved))} / {totalGoalTarget} zł</span>
+            </div>
+            <div className="mb"><div className="mbf" style={{width:Math.min((totalGoalSaved/totalGoalTarget)*100,100)+"%",backgroundColor:"#E67E22"}}/></div>
+          </div>
+
+          {QUESTS.map(q=>{const dn=data.doneQ.includes(q.id);const op=questOpen===q.id;const relGoal=q.goalId?goals.find(g=>g.id===q.goalId):null;return(
+            <div key={q.id} className="qcard">
+              <div className="qm" onClick={()=>setQuestOpen(op?null:q.id)}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div className={"qch"+(dn?" done":"")}>{dn&&"✓"}</div>
+                  <div><div style={{fontWeight:600,fontSize:14,opacity:dn?.5:1,textDecoration:dn?"line-through":"none"}}>{q.title}</div><div style={{color:"#F1C40F",fontSize:11}}>+{q.xp} XP</div></div>
+                </div><span style={{color:"#5a4d35"}}>{op?"▲":"▼"}</span>
+              </div>
+              {op&&<div style={{padding:"0 14px 14px",borderTop:"1px solid #222"}}>
+                <div style={{color:"#8a7d65",fontSize:13,marginTop:12,lineHeight:1.5}}>{q.desc}</div>
+                {relGoal&&<div style={{marginTop:8,background:"#141210",borderRadius:8,padding:"8px 10px"}}>
+                  <div style={{fontSize:11,color:"#5a4d35",marginBottom:4}}>ПРОГРЕС ЦІЛІ</div>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
+                    <span>{relGoal.emoji} {relGoal.name}</span>
+                    <span style={{color:relGoal.color,fontWeight:700}}>{fmtN(goalSaved(relGoal.id))} / {relGoal.target} zł</span>
+                  </div>
+                  <div className="mb"><div className="mbf" style={{width:Math.min((goalSaved(relGoal.id)/relGoal.target)*100,100)+"%",backgroundColor:relGoal.color}}/></div>
+                </div>}
+                {!dn&&<button className="qbtn" onClick={()=>doQuest(q.id)}>✓ Виконано!</button>}
+              </div>}
+            </div>);})}
+          <button className="rbtn" onClick={resetAll}>Скинути всі дані</button>
+        </>}
+      </div>
+
+      {/* INCOME MODAL */}
+      {incModal&&<div className="modal" onClick={()=>setIncModal(false)}><div className="modal-c" onClick={e=>e.stopPropagation()}>
+        <div className="modal-t">Додати дохід</div>
+        <div className="tbtn-r">{[{id:"cash",l:"💵 Готівка"},{id:"card",l:"💳 Карта"}].map(t=><button key={t.id} className={"tbtn"+(incType===t.id?" on":"")} onClick={()=>setIncType(t.id)}>{t.l}</button>)}</div>
+        <input type="text" inputMode="decimal" placeholder="Сума (87,34)" value={incAmt} onChange={e=>setIncAmt(e.target.value)} className="modal-i" autoFocus/>
+        <div className="qk-r">{[100,200,500,1000,1300,1500,2700].map(a=><button key={a} className="qk" onClick={()=>setIncAmt(String(a))}>{a}</button>)}</div>
+        <button className="modal-s" onClick={addIncome} disabled={!incAmt}>Додати</button>
+      </div></div>}
+
+      {/* JAR MODAL */}
+      {jarModal&&<div className="modal" onClick={()=>setJarModal(null)}><div className="modal-c" onClick={e=>e.stopPropagation()}>
+        <div style={{fontSize:36,textAlign:"center"}}>{JARS.find(j=>j.id===jarModal)?.emoji}</div>
+        <div className="modal-t">{JARS.find(j=>j.id===jarModal)?.name}</div>
+        <div className="pay-label">Чим платиш?</div>
+        <div className="tbtn-r">
+          <button className={"tbtn"+(jarPay==="cash"?" on":"")} onClick={()=>setJarPay("cash")}>💵 Готівка ({fmtN(cashBal)})</button>
+          <button className={"tbtn"+(jarPay==="card"?" on":"")} onClick={()=>setJarPay("card")}>💳 Карта ({fmtN(cardBal)})</button>
+        </div>
+        <input type="text" inputMode="decimal" placeholder="Сума (87,34)" value={jarAmt} onChange={e=>setJarAmt(e.target.value)} className="modal-i" autoFocus/>
+        <div className="qk-r">{[10,20,50,100,200,500].map(a=><button key={a} className="qk" onClick={()=>setJarAmt(String(a))}>{a}</button>)}</div>
+        <input type="text" placeholder="Коментар (пальне, їжа...)" value={jarCom} onChange={e=>setJarCom(e.target.value)} className="modal-i2"/>
+        <button className="modal-s" onClick={allocate} disabled={!jarAmt}>Розподілити в банку</button>
+      </div></div>}
+
+      {/* GOAL MODAL */}
+      {goalModal&&<div className="modal" onClick={()=>setGoalModal(null)}><div className="modal-c" onClick={e=>e.stopPropagation()}>
+        {(()=>{const g=goals.find(x=>x.id===goalModal);return(<>
+          <div style={{fontSize:36,textAlign:"center"}}>{g?.emoji}</div>
+          <div className="modal-t">{g?.name}</div>
+          <div style={{textAlign:"center",fontSize:13,color:"#8a7d65",marginBottom:12}}>{fmtN(goalSaved(goalModal))} / {g?.target} zł</div>
+          <div className="pay-label">Чим платиш?</div>
+          <div className="tbtn-r">
+            <button className={"tbtn"+(goalPay==="cash"?" on":"")} onClick={()=>setGoalPay("cash")}>💵 Готівка ({fmtN(cashBal)})</button>
+            <button className={"tbtn"+(goalPay==="card"?" on":"")} onClick={()=>setGoalPay("card")}>💳 Карта ({fmtN(cardBal)})</button>
+          </div>
+          <input type="text" inputMode="decimal" placeholder="Сума" value={goalAmt} onChange={e=>setGoalAmt(e.target.value)} className="modal-i" autoFocus/>
+          <div className="qk-r">{[100,200,500,1000,g?.target].filter(Boolean).map(a=><button key={a} className="qk" onClick={()=>setGoalAmt(String(a))}>{a}</button>)}</div>
+          <button className="modal-s orange" onClick={allocateGoal} disabled={!goalAmt}>🎯 Поповнити ціль</button>
+        </>);})()}
+      </div></div>}
+
+      {/* TRANSFER MODAL */}
+      {xferModal&&<div className="modal" onClick={()=>setXferModal(false)}><div className="modal-c" onClick={e=>e.stopPropagation()}>
+        <div className="modal-t">Переказ</div>
+        <div className="tbtn-r">
+          <button className={"tbtn"+(xferDir==="cash2card"?" on":"")} onClick={()=>setXferDir("cash2card")}>💵→💳</button>
+          <button className={"tbtn"+(xferDir==="card2cash"?" on":"")} onClick={()=>setXferDir("card2cash")}>💳→💵</button>
+        </div>
+        <div style={{textAlign:"center",fontSize:16,fontWeight:700,marginBottom:12,color:"#9B59B6"}}>
+          {xferDir==="cash2card"?"💵 Готівка → 💳 Карта":"💳 Карта → 💵 Готівка"}
+        </div>
+        <input type="text" inputMode="decimal" placeholder="Сума" value={xferAmt} onChange={e=>setXferAmt(e.target.value)} className="modal-i" autoFocus/>
+        <div className="qk-r">{[50,100,200,500,1000].map(a=><button key={a} className="qk" onClick={()=>setXferAmt(String(a))}>{a}</button>)}</div>
+        <button className="modal-s" onClick={doTransfer} disabled={!xferAmt}>Переказати</button>
+      </div></div>}
+
+      <div className="nav">
+        {[{id:"main",ic:"🏛️",lb:"Банки"},{id:"stats",ic:"📊",lb:"Статі"},{id:"cal",ic:"📅",lb:"Календар"},{id:"quests",ic:"⚔️",lb:"Квести"}].map(t=>
+          <button key={t.id} className={"nav-b"+(tab===t.id?" on":"")} onClick={()=>{setTab(t.id);setJarHist(null);setSelDay(null);setOpenCat(null);}}>
+            <div className="nav-ic">{t.ic}</div><div className="nav-lb">{t.lb}</div>
+          </button>)}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.render(<App/>,document.getElementById("root"));
+</script>
+</body>
+</html>
