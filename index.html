@@ -124,9 +124,6 @@ body{background:#0f0d0a;color:#d4c9b0;font-family:system-ui,-apple-system,sans-s
 .month-tabs{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px}
 .month-tab{padding:6px 14px;font-size:12px;font-weight:600;background:#1a1612;color:#6b6155;border:1px solid #222;border-radius:16px;cursor:pointer;white-space:nowrap;font-family:inherit}
 .month-tab.on{background:#222;color:#F1C40F;border-color:#F1C40F}
-.deadline-bar{background:#1a1a12;border-radius:10px;padding:10px 14px;margin-bottom:14px;border:1px solid #2a2a12;display:flex;justify-content:space-between;align-items:center}
-.deadline-l{font-size:12px;color:#8a7d65}
-.deadline-r{font-size:14px;font-weight:700;color:#E67E22}
 </style>
 </head>
 <body>
@@ -170,16 +167,16 @@ const JARS=[
 ];
 
 const GOALS_INIT=[
-  {id:"dima",name:"Діма",emoji:"🔑",target:400,done:false,color:"#E67E22"},
-  {id:"apt",name:"Квартира",emoji:"🏠",target:3000,done:false,color:"#27AE60"},
   {id:"ins",name:"Страхування",emoji:"🛡️",target:2700,done:false,color:"#3498DB"},
+  {id:"canada",name:"Канада",emoji:"✈️",target:2000,done:false,color:"#E67E22"},
+  {id:"cyprus",name:"Кіпр",emoji:"🏖️",target:2400,done:false,color:"#27AE60"},
 ];
 
 const QUESTS=[
-  {id:1,title:"Закрити квартиру",desc:"Накопич і заплати 3000 zł за квартиру до червня",xp:300,goalId:"apt"},
-  {id:2,title:"Закрити страхування",desc:"Накопич і заплати 2700 zł за страхування до червня",xp:250,goalId:"ins"},
-  {id:3,title:"Розрахуватись з Дімою",desc:"Накопич і віддай 400 zł Дімі до червня",xp:150,goalId:"dima"},
-  {id:4,title:"Закрити всі цілі",desc:"Виконати всі три фінансові цілі до червня 2026",xp:500,goalId:null},
+  {id:1,title:"Закрити страхування",desc:"Накопич і заплати 2700 zł за страхування",xp:250,goalId:"ins"},
+  {id:2,title:"Накопити на Канаду",desc:"Накопич 2000 zł для подорожі до Канади",xp:200,goalId:"canada"},
+  {id:3,title:"Накопити на Кіпр",desc:"Накопич 2400 zł для подорожі на Кіпр",xp:230,goalId:"cyprus"},
+  {id:4,title:"Закрити всі цілі",desc:"Виконати всі три фінансові цілі",xp:500,goalId:null},
 ];
 
 const LEVELS=[
@@ -191,7 +188,6 @@ const LEVELS=[
 const TIPS=["«Частину всіх грошей, що заробляєш — залиш собі» — Аркад","Контролюй витрати щодня","Кожна злотна в банку — крок до свободи","Дисципліна сьогодні — свобода завтра","Готівка яку не записав — готівка яку втратив","Маленькі кроки щодня = великий результат"];
 const MN=["Січень","Лютий","Березень","Квітень","Травень","Червень","Липень","Серпень","Вересень","Жовтень","Листопад","Грудень"];
 const DN=["Пн","Вт","Ср","Чт","Пт","Сб","Нд"];
-const DEADLINE=new Date(2026,5,1);
 
 function mon(d){const x=new Date(d);const dy=x.getDay();x.setDate(x.getDate()-dy+(dy===0?-6:1));x.setHours(0,0,0,0);return x;}
 function sun(d){const m=mon(d);m.setDate(m.getDate()+6);m.setHours(23,59,59,999);return m;}
@@ -199,7 +195,6 @@ function fmt(d){return d.getDate().toString().padStart(2,"0")+"."+(d.getMonth()+
 function r2(n){return Math.round(n*100)/100;}
 function parseNum(s){if(!s)return 0;return parseFloat(s.replace(",","."))||0;}
 function fmtN(n){return Number.isInteger(n)?n.toString():n.toFixed(2);}
-function daysLeft(){return Math.max(0,Math.ceil((DEADLINE-new Date())/(1000*60*60*24)));}
 
 const EMPTY={incomes:[],allocs:[],goalAllocs:[],goals:GOALS_INIT,xp:0,doneQ:[],transfers:[]};
 
@@ -236,6 +231,15 @@ function App(){
       if(d){
         if(!d.goalAllocs)d.goalAllocs=[];
         if(!d.goals)d.goals=GOALS_INIT.map(g=>({...g}));
+        else{
+          // Merge: keep existing goal progress, add new goals if missing
+          const existingIds=d.goals.map(g=>g.id);
+          GOALS_INIT.forEach(gi=>{
+            if(!existingIds.includes(gi.id))d.goals.push({...gi});
+          });
+          // Remove old goals that are no longer in GOALS_INIT
+          d.goals=d.goals.filter(g=>GOALS_INIT.some(gi=>gi.id===g.id));
+        }
         if(!d.transfers)d.transfers=[];
         setData(d);
       }
@@ -315,12 +319,12 @@ function App(){
     <div className="ob">
       <div style={{fontSize:56,marginBottom:12}}>🏛️</div>
       <h1 className="ob-t">Шлях Аркада</h1>
-      <p className="ob-s">Розподіляй зарплату по банках<br/>та закрий всі цілі до червня 2026</p>
+      <p className="ob-s">Розподіляй зарплату по банках<br/>та досягай своїх фінансових цілей</p>
       <div className="ob-c"><p className="ob-q">«Частину всіх грошей, що заробляєш — залиш собі»</p><p className="ob-a">— Аркад</p></div>
       <div className="ob-b">
-        <div style={{color:"#F1C40F",fontSize:11,letterSpacing:2,marginBottom:8}}>ЦІЛІ ДО ЧЕРВНЯ</div>
+        <div style={{color:"#F1C40F",fontSize:11,letterSpacing:2,marginBottom:8}}>МОЇ ЦІЛІ</div>
         {GOALS_INIT.map(g=><div key={g.id} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",fontSize:13}}><span>{g.emoji} {g.name}</span><span style={{color:g.color,fontWeight:700}}>{g.target} zł</span></div>)}
-        <div style={{marginTop:10,paddingTop:8,borderTop:"1px solid #2d2518",display:"flex",justifyContent:"space-between",fontSize:12,color:"#8a7d65"}}><span>Загалом:</span><span style={{color:"#E67E22",fontWeight:700}}>6 100 zł</span></div>
+        <div style={{marginTop:10,paddingTop:8,borderTop:"1px solid #2d2518",display:"flex",justifyContent:"space-between",fontSize:12,color:"#8a7d65"}}><span>Загалом:</span><span style={{color:"#E67E22",fontWeight:700}}>7 100 zł</span></div>
       </div>
       <button className="start" onClick={()=>setData({...EMPTY,goals:GOALS_INIT.map(g=>({...g}))})}>⚔️ Почати подорож</button>
     </div>
@@ -347,7 +351,6 @@ function App(){
             {syncStatus==="ok"?"☁️ Дані збережені в хмарі":syncStatus==="saving"?"⏳ Збереження...":"❌ Помилка збереження — перевір інтернет"}
           </div>
           <div className="tip">📜 {tip}</div>
-          <div className="deadline-bar"><span className="deadline-l">⏳ До червня 2026</span><span className="deadline-r">{daysLeft()} днів</span></div>
           <div className="sal">
             <div className="sal-h"><span className="sal-l">Загальний баланс</span><span className="sal-d">Тиждень: {fmt(wS)}–{fmt(wE)}</span></div>
             <div className="sal-big" style={{color:remaining<0?"#FF6B6B":remaining===0?"#27AE60":"#F1C40F"}}>{fmtN(remaining)} zł</div>
@@ -364,7 +367,7 @@ function App(){
           <div className="j-title">Банки</div>
           <div className="j-grid">{JARS.map(j=>{const sp=wAll(j.id);return(<button key={j.id} className="j-card" onClick={()=>{setJarModal(j.id);setJarAmt("");setJarCom("");setJarPay("cash");}}><div className="j-em">{j.emoji}</div><div className="j-nm">{j.name}</div><div className="j-am" style={{color:j.color}}>{fmtN(sp)} zł</div><span className="j-hb" onClick={e=>{e.stopPropagation();setJarHist(jarHist===j.id?null:j.id);}}>📋</span></button>);})}</div>
           {jarHist&&<div className="hist"><div className="hist-t"><span>{JARS.find(j=>j.id===jarHist)?.emoji} {JARS.find(j=>j.id===jarHist)?.name}</span><button className="cls" onClick={()=>setJarHist(null)}>✕</button></div>{jHist(jarHist).length===0?<div className="emp">Поки пусто</div>:jHist(jarHist).map(a=>(<div key={a.id} className="hist-r"><div><div className="hist-a">{a.payFrom==="cash"?"💵":"💳"} {fmtN(a.amount)} zł</div>{a.comment&&<div className="hist-c">{a.comment}</div>}<div className="hist-d">{new Date(a.date).toLocaleDateString("uk-UA",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</div></div><button className="del" onClick={()=>delAlloc(a.id)}>🗑️</button></div>))}</div>}
-          <div className="goal-title">🎯 Цілі до червня ({fmtN(totalGoalSaved)} / {totalGoalTarget} zł)</div>
+          <div className="goal-title">🎯 Мої цілі ({fmtN(totalGoalSaved)} / {totalGoalTarget} zł)</div>
           <div style={{background:"#1a1612",borderRadius:10,padding:"10px 14px",marginBottom:14,border:"1px solid #2d1f0a"}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,fontSize:12}}><span style={{color:"#8a7d65"}}>Загальний прогрес</span><span style={{color:"#E67E22",fontWeight:700}}>{Math.round((totalGoalSaved/totalGoalTarget)*100)}%</span></div>
             <div className="goal-bar" style={{marginBottom:0}}><div className="goal-fill" style={{width:Math.min((totalGoalSaved/totalGoalTarget)*100,100)+"%",backgroundColor:"#E67E22"}}/></div>
@@ -390,9 +393,9 @@ function App(){
         </>}
 
         {tab==="quests"&&<>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div className="sec">Квести до червня</div><span style={{color:"#8a7d65",fontSize:13}}>{data.doneQ.length}/{QUESTS.length}</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div className="sec">Квести</div><span style={{color:"#8a7d65",fontSize:13}}>{data.doneQ.length}/{QUESTS.length}</span></div>
           <div style={{background:"#1a1a12",borderRadius:10,padding:"10px 12px",marginBottom:14,border:"1px solid #2a2a12"}}>
-            <div style={{fontSize:11,color:"#5a4d35",marginBottom:4}}>ЗАГАЛЬНИЙ ПРОГРЕС ЦІЛЕЙ</div>
+            <div style={{fontSize:11,color:"#5a4d35",marginBottom:4}}>ЗАГАЛЬНИЙ ПРОГРЕС</div>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:13,color:"#8a7d65"}}>Накопичено</span><span style={{fontSize:13,fontWeight:700,color:"#E67E22"}}>{fmtN(totalGoalSaved)} / {totalGoalTarget} zł</span></div>
             <div className="mb"><div className="mbf" style={{width:Math.min((totalGoalSaved/totalGoalTarget)*100,100)+"%",backgroundColor:"#E67E22"}}/></div>
           </div>
