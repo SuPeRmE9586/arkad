@@ -199,19 +199,25 @@ const JARS=[
   {id:"personal",name:"Мої",emoji:"🎮",color:"#3498DB"},
   {id:"couple",name:"Удвох",emoji:"💑",color:"#E74C3C"},
 ];
+// Банка для відкладання: гроші йдуть з балансу, але це не витрати
+const SAVE_JAR={id:"save",name:"Скарбничка",emoji:"🏺",color:"#F1C40F"};
+const ALL_JARS=[...JARS,SAVE_JAR];
 
 // Цілі, які вже виконані (з першої версії) — при першому завантаженні позначаються як виконані
 const LEGACY_GOALS=["ins","canada","cyprus"];
 const GOAL_COLORS=["#3498DB","#E67E22","#27AE60","#9B59B6","#E74C3C","#1ABC9C","#F1C40F"];
 
 // Місячні квести за «Найбагатшою людиною у Вавилоні». Прогрес рахується автоматично з записів.
-const WEEKLY_SAVE=150;
-const ACTIVE_DAYS=15;
+// val — число, яке можна змінити (відсоток, сума, дні)
 const MONTH_QUESTS=[
-  {id:"tenth",title:"Перший закон золота",xp:100,src:"Ліки 1: Наповнюй свій гаманець",desc:"Відклади в цілі щонайменше 1/10 усього, що заробив цього місяця. «Частину всього, що заробляєш, залиш собі»."},
-  {id:"weekly",title:`Відкладай ${WEEKLY_SAVE} zł щотижня`,xp:150,src:"Ліки 1: Наповнюй свій гаманець",desc:`Кожного тижня цього місяця відклади в цілі щонайменше ${WEEKLY_SAVE} zł. Тиждень рахується за понеділком, з якого він починається.`},
-  {id:"track",title:"Знай, куди йде золото",xp:100,src:"Ліки 2: Контролюй витрати",desc:`Записуй доходи, витрати або відкладене щонайменше ${ACTIVE_DAYS} різних днів за місяць.`},
-  {id:"live",title:"Живи за коштами",xp:120,src:"Ліки 2: Контролюй витрати",desc:"Витрати разом із відкладеним за місяць не більші за дохід місяця. Нагороду можна забрати, коли місяць закінчиться."},
+  {id:"tenth",xp:100,src:"Ліки 1: Наповнюй свій гаманець",val:10,valLabel:"Відсоток від доходу, %",
+    t:v=>"Перший закон золота",d:v=>`Відклади (у скарбничку або цілі) щонайменше ${v}% усього, що заробив цього місяця. «Частину всього, що заробляєш, залиш собі».`},
+  {id:"weekly",xp:150,src:"Ліки 1: Наповнюй свій гаманець",val:150,valLabel:"Сума на тиждень, zł",
+    t:v=>`Відкладай ${v} zł щотижня`,d:v=>`Кожного тижня цього місяця відклади (у скарбничку або цілі) щонайменше ${v} zł. Тиждень рахується за понеділком, з якого він починається.`},
+  {id:"track",xp:100,src:"Ліки 2: Контролюй витрати",val:15,valLabel:"Кількість днів",
+    t:v=>"Знай, куди йде золото",d:v=>`Записуй доходи, витрати або відкладене щонайменше ${v} різних днів за місяць.`},
+  {id:"live",xp:120,src:"Ліки 2: Контролюй витрати",
+    t:v=>"Живи за коштами",d:v=>"Витрати разом із відкладеним за місяць не більші за дохід місяця. Нагороду можна забрати, коли місяць закінчиться."},
 ];
 // Один «ручний» квест на місяць, по черзі
 const MANUAL_QUESTS=[
@@ -230,26 +236,32 @@ function sumA(arr){return Math.round(arr.reduce((s,a)=>s+a.amount,0)*100)/100;}
 // Рахує стан усіх квестів за місяць y/m
 function monthQuests(data,y,m,now){
   const inc=sumA(data.incomes.filter(x=>inMonth(x.date,y,m)));
-  const spent=sumA(data.allocs.filter(x=>inMonth(x.date,y,m)));
-  const gA=data.goalAllocs||[];
+  const spent=sumA(data.allocs.filter(x=>x.jarId!=="save"&&inMonth(x.date,y,m)));
+  // Відкладене = внески в цілі + скарбничка
+  const gA=[...(data.goalAllocs||[]),...data.allocs.filter(x=>x.jarId==="save")];
   const saved=sumA(gA.filter(x=>inMonth(x.date,y,m)));
+  const cfg=data.questCfg||{};
+  const V=(id)=>{const q=MONTH_QUESTS.find(x=>x.id===id);const c=cfg[id]||{};return c.val!=null?c.val:q.val;};
   const days=new Set([...data.incomes,...data.allocs,...gA,...(data.transfers||[])].filter(x=>inMonth(x.date,y,m)).map(x=>new Date(x.date).getDate())).size;
   const over=now>new Date(y,m+1,1);
   const weeks=[];
   const dim=new Date(y,m+1,0).getDate();
   for(let d=1;d<=dim;d++){const st=new Date(y,m,d);if(st.getDay()!==1)continue;const en=new Date(y,m,d+7);
     const amt=sumA(gA.filter(x=>{const t=new Date(x.date);return t>=st&&t<en;}));
-    weeks.push({st,amt,ok:amt>=WEEKLY_SAVE,now:now>=st&&now<en});}
-  const tenthNeed=Math.round(inc*0.1*100)/100;
+    weeks.push({st,amt,ok:amt>=V("weekly"),now:now>=st&&now<en});}
+  const tenthNeed=Math.round(inc*V("tenth")/100*100)/100;
   const res={
     tenth:{done:inc>0&&saved>=tenthNeed,prog:inc>0?`${saved} / ${tenthNeed} zł`:"Ще немає доходу цього місяця"},
     weekly:{done:weeks.length>0&&weeks.every(w=>w.ok),prog:`${weeks.filter(w=>w.ok).length} / ${weeks.length} тижнів`,weeks},
-    track:{done:days>=ACTIVE_DAYS,prog:`${days} / ${ACTIVE_DAYS} днів`},
+    track:{done:days>=V("track"),prog:`${days} / ${V("track")} днів`},
     live:{done:over&&inc>0&&inc-spent-saved>=0,prog:`${inc-spent-saved>=0?"✓":"✗"} залишок ${Math.round((inc-spent-saved)*100)/100} zł`+(over?"":" (перевірка в кінці місяця)")},
   };
   const man=MANUAL_QUESTS[(y*12+m)%MANUAL_QUESTS.length];
   const claimed=(data.monthQ&&data.monthQ[monthKey(y,m)])||[];
-  const list=[...MONTH_QUESTS.map(q=>({...q,auto:true,...res[q.id]})),{...man,auto:false,done:claimed.includes(man.id),prog:"Відміть сам, коли виконаєш"}].map(q=>({...q,claimed:claimed.includes(q.id)}));
+  // Вбудовані квести з урахуванням твоїх змін (назва, опис, XP, число, приховано)
+  const withCfg=q=>{const c=cfg[q.id]||{};return{...q,title:c.title||q.title,desc:c.desc||q.desc,xp:c.xp!=null?c.xp:q.xp,hidden:!!c.hidden,builtin:true};};
+  const autoQ=MONTH_QUESTS.map(q=>{const v=V(q.id);return withCfg({id:q.id,xp:q.xp,src:q.src,val:q.val!=null?v:undefined,valLabel:q.valLabel,title:q.t(v),desc:q.d(v),auto:true,...res[q.id]});});
+  const list=[...autoQ,withCfg({...man,auto:false,done:claimed.includes(man.id),prog:"Відміть сам, коли виконаєш"})].map(q=>({...q,claimed:claimed.includes(q.id)}));
   // Власні квести: щомісячні повторюються, разові висять до виконання
   const doneOnce=data.doneQ||[];
   const custom=(data.customQ||[]).filter(c=>c.repeat||!doneOnce.includes(c.id)||claimed.includes(c.id)).map(c=>({...c,custom:true,auto:false,done:false,
@@ -392,12 +404,13 @@ function App(){
   const allCC2=r2(allXfers.filter(t=>t.dir==="card2cash").reduce((s,t)=>s+t.amount,0));
   const totalCashInc=r2((data?data.incomes:[]).filter(i=>i.type==="cash").reduce((s,i)=>s+i.amount,0));
   const totalCardInc=r2((data?data.incomes:[]).filter(i=>i.type==="card").reduce((s,i)=>s+i.amount,0));
+  const saveTotal=r2((data?data.allocs:[]).filter(a=>a.jarId==="save").reduce((s,a)=>s+a.amount,0));
   const adjSum=(t)=>r2((data?data.adjusts||[]:[]).filter(a=>a.type===t).reduce((s,a)=>s+a.amount,0));
   const cashBal=r2(totalCashInc-totalAllocFrom("cash")-allC2C+allCC2+adjSum("cash"));
   const cardBal=r2(totalCardInc-totalAllocFrom("card")+allC2C-allCC2+adjSum("card"));
   const remaining=r2(cashBal+cardBal);
   function mInc(m){return r2((data?data.incomes:[]).filter(i=>{const d=new Date(i.date);return d.getMonth()===m&&d.getFullYear()===now.getFullYear();}).reduce((s,i)=>s+i.amount,0));}
-  function mAllocs(m){return r2((data?data.allocs:[]).filter(a=>{const d=new Date(a.date);return d.getMonth()===m&&d.getFullYear()===now.getFullYear();}).reduce((s,a)=>s+a.amount,0));}
+  function mAllocs(m){return r2((data?data.allocs:[]).filter(a=>{const d=new Date(a.date);return a.jarId!=="save"&&d.getMonth()===m&&d.getFullYear()===now.getFullYear();}).reduce((s,a)=>s+a.amount,0));}
   function mAllocsJar(jid,m){return r2((data?data.allocs:[]).filter(a=>{const d=new Date(a.date);return a.jarId===jid&&d.getMonth()===m&&d.getFullYear()===now.getFullYear();}).reduce((s,a)=>s+a.amount,0));}
   function mAllocsDetail(jid,m){return(data?data.allocs:[]).filter(a=>{const d=new Date(a.date);return a.jarId===jid&&d.getMonth()===m&&d.getFullYear()===now.getFullYear();}).sort((a,b)=>new Date(b.date)-new Date(a.date));}
   function goalSaved(gid){return r2((data?data.goalAllocs||[]:[]).filter(a=>a.goalId===gid).reduce((s,a)=>s+a.amount,0));}
@@ -454,14 +467,23 @@ function App(){
     if(add.length)setData(p=>({...p,adjusts:[...(p.adjusts||[]),...add]}));
     setBalEdit(null);if(add.length)showT("✏️ Баланс виправлено");
   }
-  function openQuestEdit(q){setQuestEdit(q?{id:q.id,title:q.title,desc:q.desc||"",xp:String(q.xp),repeat:!!q.repeat}:{id:null,title:"",desc:"",xp:"50",repeat:true});}
+  function openQuestEdit(q){setQuestEdit(q?{id:q.id,builtin:!!q.builtin,title:q.title,desc:q.desc||"",origTitle:q.title,origDesc:q.desc||"",xp:String(q.xp),repeat:!!q.repeat,val:q.val!=null?String(q.val):null,valLabel:q.valLabel}:{id:null,title:"",desc:"",xp:"50",repeat:true});}
+  function setQuestCfg(id,patch){setData(p=>({...p,questCfg:{...(p.questCfg||{}),[id]:{...((p.questCfg||{})[id]||{}),...patch}}}));}
   function saveQuest(){
     const e=questEdit;const title=e.title.trim();if(!title)return;
-    const xp=Math.max(0,Math.round(parseNum(e.xp)))||0;const q={title,desc:e.desc.trim(),xp,repeat:e.repeat};
+    const xp=Math.max(0,Math.round(parseNum(e.xp)))||0;
+    if(e.builtin){const patch={xp};if(title!==e.origTitle)patch.title=title;if(e.desc.trim()!==e.origDesc)patch.desc=e.desc.trim();if(e.val!=null){const v=parseNum(e.val);if(v>0)patch.val=r2(v);}setQuestCfg(e.id,patch);setQuestEdit(null);showT("✏️ Квест оновлено");return;}
+    const q={title,desc:e.desc.trim(),xp,repeat:e.repeat};
     setData(p=>{const cs=p.customQ||[];return{...p,customQ:e.id?cs.map(c=>c.id===e.id?{...c,...q}:c):[...cs,{id:"c"+Date.now()+Math.random().toString(36).slice(2,6),...q}]};});
     setQuestEdit(null);showT(e.id?"✏️ Квест оновлено":"⚔️ Новий квест!");
   }
-  function deleteQuest(id){if(!confirm("Видалити квест?"))return;setData(p=>({...p,customQ:(p.customQ||[]).filter(c=>c.id!==id)}));setQuestEdit(null);}
+  function deleteQuest(id,builtin){
+    if(!confirm("Видалити квест?"))return;
+    if(builtin)setQuestCfg(id,{hidden:true});
+    else setData(p=>({...p,customQ:(p.customQ||[]).filter(c=>c.id!==id)}));
+    setQuestEdit(null);
+  }
+  function restoreQuests(){setData(p=>{const c={...(p.questCfg||{})};Object.keys(c).forEach(k=>{c[k]={...c[k],hidden:false};});return{...p,questCfg:c};});}
   function resetAll(){if(confirm("Видалити ВСІ дані?")){setData({...EMPTY});}}
 
   const dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
@@ -492,10 +514,12 @@ function App(){
   const totalGoalTarget=r2(activeGoals.reduce((s,g)=>s+g.target,0));
   const totalGoalSaved=r2(activeGoals.reduce((s,g)=>s+goalSaved(g.id),0));
   const curKey=monthKey(now.getFullYear(),now.getMonth());
-  const curQ=monthQuests(data,now.getFullYear(),now.getMonth(),now);
+  const allCurQ=monthQuests(data,now.getFullYear(),now.getMonth(),now);
+  const curQ=allCurQ.filter(q=>!q.hidden);
+  const hiddenN=allCurQ.length-curQ.length;
   const prevY=now.getMonth()===0?now.getFullYear()-1:now.getFullYear();const prevM=(now.getMonth()+11)%12;
   const prevKey=monthKey(prevY,prevM);
-  const prevQ=monthQuests(data,prevY,prevM,now).filter(q=>q.auto&&q.done&&!q.claimed);
+  const prevQ=monthQuests(data,prevY,prevM,now).filter(q=>q.auto&&q.done&&!q.claimed&&!q.hidden);
 
   return(
     <div className="app">
@@ -525,8 +549,9 @@ function App(){
             </div>
           </div>
           <div className="j-title">Банки</div>
+          <button className="j-card" style={{width:"100%",marginBottom:8,borderColor:"#3d3520",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",textAlign:"left"}} onClick={()=>{setJarModal("save");setJarAmt("");setJarCom("");setJarPay("cash");}}><div className="j-em">🏺</div><div style={{flex:1}}><div className="j-nm" style={{margin:0}}>Скарбничка</div><div style={{fontSize:11,color:"#6b6155"}}>цього тижня +{fmtN(wAll("save"))} zł</div></div><div className="j-am" style={{color:"#F1C40F"}}>{fmtN(saveTotal)} zł</div><span className="j-hb" onClick={e=>{e.stopPropagation();setJarHist(jarHist==="save"?null:"save");}}>📋</span></button>
           <div className="j-grid">{JARS.map(j=>{const sp=wAll(j.id);return(<button key={j.id} className="j-card" onClick={()=>{setJarModal(j.id);setJarAmt("");setJarCom("");setJarPay("cash");}}><div className="j-em">{j.emoji}</div><div className="j-nm">{j.name}</div><div className="j-am" style={{color:j.color}}>{fmtN(sp)} zł</div><span className="j-hb" onClick={e=>{e.stopPropagation();setJarHist(jarHist===j.id?null:j.id);}}>📋</span></button>);})}</div>
-          {jarHist&&<div className="hist"><div className="hist-t"><span>{JARS.find(j=>j.id===jarHist)?.emoji} {JARS.find(j=>j.id===jarHist)?.name}</span><button className="cls" onClick={()=>setJarHist(null)}>✕</button></div>{jHist(jarHist).length===0?<div className="emp">Поки пусто</div>:jHist(jarHist).map(a=>(<div key={a.id} className="hist-r"><div><div className="hist-a">{a.payFrom==="cash"?"💵":"💳"} {fmtN(a.amount)} zł</div>{a.comment&&<div className="hist-c">{a.comment}</div>}<div className="hist-d">{new Date(a.date).toLocaleDateString("uk-UA",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</div></div><button className="del" onClick={()=>delAlloc(a.id)}>🗑️</button></div>))}</div>}
+          {jarHist&&<div className="hist"><div className="hist-t"><span>{ALL_JARS.find(j=>j.id===jarHist)?.emoji} {ALL_JARS.find(j=>j.id===jarHist)?.name}</span><button className="cls" onClick={()=>setJarHist(null)}>✕</button></div>{jHist(jarHist).length===0?<div className="emp">Поки пусто</div>:jHist(jarHist).map(a=>(<div key={a.id} className="hist-r"><div><div className="hist-a">{a.payFrom==="cash"?"💵":"💳"} {fmtN(a.amount)} zł</div>{a.comment&&<div className="hist-c">{a.comment}</div>}<div className="hist-d">{new Date(a.date).toLocaleDateString("uk-UA",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</div></div><button className="del" onClick={()=>delAlloc(a.id)}>🗑️</button></div>))}</div>}
           <div className="goal-title">🎯 Мої цілі{activeGoals.length>0&&` (${fmtN(totalGoalSaved)} / ${fmtN(totalGoalTarget)} zł)`}</div>
           {activeGoals.length>1&&<div style={{background:"#1a1612",borderRadius:10,padding:"10px 14px",marginBottom:14,border:"1px solid #2d1f0a"}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,fontSize:12}}><span style={{color:"#8a7d65"}}>Загальний прогрес</span><span style={{color:"#E67E22",fontWeight:700}}>{Math.round((totalGoalSaved/totalGoalTarget)*100)}%</span></div>
@@ -551,15 +576,16 @@ function App(){
         {tab==="cal"&&<>
           <div className="cal-t">{MN[now.getMonth()]} {now.getFullYear()}</div>
           <div className="cal-g">{DN.map(d=><div key={d} className="cal-dn">{d}</div>)}{Array(af).fill(null).map((_,i)=><div key={"e"+i}/>)}{Array(dim).fill(null).map((_,i)=>{const d=i+1;const t=dayT(d);const isT=d===now.getDate();const has=dayA(d).length>0;return<button key={d} className={"cal-d"+(isT?" today":"")+(has?" has":"")+(selDay===d?" sel":"")} onClick={()=>setSelDay(selDay===d?null:d)}><div style={{fontSize:13,fontWeight:600}}>{d}</div>{has&&<div style={{fontSize:9,color:"#27AE60",fontWeight:700}}>{fmtN(t)}</div>}</button>;})}</div>
-          {selDay&&<div className="dd"><div style={{color:"#F1C40F",fontWeight:700,marginBottom:8}}>{selDay} {MN[now.getMonth()]}</div>{dayA(selDay).length===0?<div className="emp">Немає записів</div>:dayA(selDay).map(a=>{const j=JARS.find(x=>x.id===a.jarId);return(<div key={a.id} className="hist-r"><div><span>{j?.emoji}</span> <span style={{fontWeight:600}}>{a.payFrom==="cash"?"💵":"💳"} {fmtN(a.amount)} zł</span>{a.comment&&<span style={{color:"#5a4d35",marginLeft:8,fontSize:12}}>— {a.comment}</span>}</div><button className="del" onClick={()=>delAlloc(a.id)}>🗑️</button></div>);})}</div>}
+          {selDay&&<div className="dd"><div style={{color:"#F1C40F",fontWeight:700,marginBottom:8}}>{selDay} {MN[now.getMonth()]}</div>{dayA(selDay).length===0?<div className="emp">Немає записів</div>:dayA(selDay).map(a=>{const j=ALL_JARS.find(x=>x.id===a.jarId);return(<div key={a.id} className="hist-r"><div><span>{j?.emoji}</span> <span style={{fontWeight:600}}>{a.payFrom==="cash"?"💵":"💳"} {fmtN(a.amount)} zł</span>{a.comment&&<span style={{color:"#5a4d35",marginLeft:8,fontSize:12}}>— {a.comment}</span>}</div><button className="del" onClick={()=>delAlloc(a.id)}>🗑️</button></div>);})}</div>}
         </>}
 
         {tab==="quests"&&<>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}><div className="sec" style={{marginBottom:0}}>Квести на {MN[now.getMonth()].toLowerCase()}</div><span style={{color:"#8a7d65",fontSize:13}}>{curQ.filter(q=>q.claimed).length}/{curQ.length}</span></div>
           <div className="tip">📜 Сім ліків від порожнього гаманця Аркада. Нові квести щомісяця, прогрес рахується сам із твоїх записів.</div>
           {prevQ.length>0&&<div className="hist" style={{borderColor:"#3d3520"}}><div className="hist-t">🏺 Нагороди за {MN[prevM].toLowerCase()}</div>{prevQ.map(q=>(<div key={q.id} className="hist-r"><div><div style={{fontWeight:600,fontSize:13}}>{q.title}</div><div className="q-prog">{q.prog}</div></div><button className="goal-done-btn" onClick={()=>claimQuest(prevKey,q)}>+{q.xp} XP</button></div>))}</div>}
-          {curQ.map(q=>{const op=questOpen===q.id;const dn=q.claimed;return(<div key={q.id} className="qcard"><div className="qm" onClick={()=>setQuestOpen(op?null:q.id)}><div style={{display:"flex",alignItems:"center",gap:10}}><div className={"qch"+(dn?" done":"")}>{dn?"✓":q.done?"!":""}</div><div><div style={{fontWeight:600,fontSize:14,opacity:dn?.5:1,textDecoration:dn?"line-through":"none"}}>{q.title}</div><div style={{fontSize:11}}><span style={{color:"#F1C40F"}}>+{q.xp} XP</span>{!dn&&<span className="q-prog"> · {q.prog}</span>}</div></div></div><span style={{color:"#5a4d35"}}>{op?"▲":"▼"}</span></div>{op&&<div style={{padding:"0 14px 14px",borderTop:"1px solid #222"}}><div className="q-src">{q.src.toUpperCase()}</div><div style={{color:"#8a7d65",fontSize:13,marginTop:6,lineHeight:1.5}}>{q.desc}</div>{q.weeks&&<div className="wk-r">{q.weeks.map((w,i)=>(<div key={i} className={"wk"+(w.ok?" ok":"")+(w.now?" now":"")}>{fmt(w.st)}<br/>{fmtN(w.amt)} zł</div>))}</div>}{!dn&&(q.auto?(q.done&&<button className="qbtn" onClick={()=>claimQuest(curKey,q)}>🏆 Забрати +{q.xp} XP</button>):<button className="qbtn" onClick={()=>claimQuest(curKey,q)}>✓ Виконано!</button>)}{q.custom&&<button className="goal-btn" style={{width:"100%",marginTop:8,color:"#8a7d65"}} onClick={()=>openQuestEdit(q)}>✏️ Змінити / видалити</button>}</div>}</div>);})}
+          {curQ.map(q=>{const op=questOpen===q.id;const dn=q.claimed;return(<div key={q.id} className="qcard"><div className="qm" onClick={()=>setQuestOpen(op?null:q.id)}><div style={{display:"flex",alignItems:"center",gap:10}}><div className={"qch"+(dn?" done":"")}>{dn?"✓":q.done?"!":""}</div><div><div style={{fontWeight:600,fontSize:14,opacity:dn?.5:1,textDecoration:dn?"line-through":"none"}}>{q.title}</div><div style={{fontSize:11}}><span style={{color:"#F1C40F"}}>+{q.xp} XP</span>{!dn&&<span className="q-prog"> · {q.prog}</span>}</div></div></div><span style={{color:"#5a4d35"}}>{op?"▲":"▼"}</span></div>{op&&<div style={{padding:"0 14px 14px",borderTop:"1px solid #222"}}><div className="q-src">{q.src.toUpperCase()}</div><div style={{color:"#8a7d65",fontSize:13,marginTop:6,lineHeight:1.5}}>{q.desc}</div>{q.weeks&&<div className="wk-r">{q.weeks.map((w,i)=>(<div key={i} className={"wk"+(w.ok?" ok":"")+(w.now?" now":"")}>{fmt(w.st)}<br/>{fmtN(w.amt)} zł</div>))}</div>}{!dn&&(q.auto?(q.done&&<button className="qbtn" onClick={()=>claimQuest(curKey,q)}>🏆 Забрати +{q.xp} XP</button>):<button className="qbtn" onClick={()=>claimQuest(curKey,q)}>✓ Виконано!</button>)}<button className="goal-btn" style={{width:"100%",marginTop:8,color:"#8a7d65"}} onClick={()=>openQuestEdit(q)}>✏️ Змінити / видалити</button></div>}</div>);})}
           <button className="btn-add" style={{width:"100%",marginTop:8}} onClick={()=>openQuestEdit(null)}>+ Свій квест</button>
+          {hiddenN>0&&<button className="btn-add" style={{width:"100%",marginTop:8,color:"#8a7d65",borderColor:"#222"}} onClick={restoreQuests}>↺ Повернути видалені квести ({hiddenN})</button>}
           <button className="rbtn" onClick={resetAll}>Скинути всі дані</button>
         </>}
       </div>
@@ -581,13 +607,14 @@ function App(){
         <div className="lbl">Назва</div><input type="text" placeholder="Напр. Не замовляти їжу 2 тижні" value={questEdit.title} onChange={e=>setQuestEdit({...questEdit,title:e.target.value})} className="modal-i2" autoFocus/>
         <div className="lbl">Опис (необовʼязково)</div><input type="text" value={questEdit.desc} onChange={e=>setQuestEdit({...questEdit,desc:e.target.value})} className="modal-i2"/>
         <div className="lbl">Нагорода, XP</div><input type="text" inputMode="numeric" value={questEdit.xp} onChange={e=>setQuestEdit({...questEdit,xp:e.target.value})} className="modal-i2"/>
-        <div className="tbtn-r"><button className={"tbtn"+(questEdit.repeat?" on":"")} onClick={()=>setQuestEdit({...questEdit,repeat:true})}>🔁 Щомісяця</button><button className={"tbtn"+(!questEdit.repeat?" on":"")} onClick={()=>setQuestEdit({...questEdit,repeat:false})}>1️⃣ Разовий</button></div>
+        {questEdit.val!=null&&<><div className="lbl">{questEdit.valLabel}</div><input type="text" inputMode="decimal" value={questEdit.val} onChange={e=>setQuestEdit({...questEdit,val:e.target.value})} className="modal-i2"/></>}
+        {!questEdit.builtin&&<div className="tbtn-r"><button className={"tbtn"+(questEdit.repeat?" on":"")} onClick={()=>setQuestEdit({...questEdit,repeat:true})}>🔁 Щомісяця</button><button className={"tbtn"+(!questEdit.repeat?" on":"")} onClick={()=>setQuestEdit({...questEdit,repeat:false})}>1️⃣ Разовий</button></div>}
         <button className="modal-s" onClick={saveQuest} disabled={!questEdit.title.trim()}>{questEdit.id?"Зберегти":"⚔️ Додати квест"}</button>
-        {questEdit.id&&<button className="btn-del" onClick={()=>deleteQuest(questEdit.id)}>🗑️ Видалити квест</button>}
+        {questEdit.id&&<button className="btn-del" onClick={()=>deleteQuest(questEdit.id,questEdit.builtin)}>🗑️ Видалити квест</button>}
       </div></div>}
       {pinModal&&<div className="modal" onClick={()=>setPinModal(false)}><div className="modal-c" onClick={e=>e.stopPropagation()}><div className="modal-t">🔒 PIN для збереження</div><div style={{textAlign:"center",fontSize:12,color:"#8a7d65",marginBottom:12}}>Вводиться один раз на цьому пристрої</div><input type="password" placeholder="PIN" value={pinInput} onChange={e=>setPinInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")submitPin();}} className="modal-i" autoFocus/><button className="modal-s" onClick={submitPin} disabled={!pinInput.trim()}>Зберегти</button></div></div>}
       {incModal&&<div className="modal" onClick={()=>setIncModal(false)}><div className="modal-c" onClick={e=>e.stopPropagation()}><div className="modal-t">Додати дохід</div><div className="tbtn-r">{[{id:"cash",l:"💵 Готівка"},{id:"card",l:"💳 Карта"}].map(t=><button key={t.id} className={"tbtn"+(incType===t.id?" on":"")} onClick={()=>setIncType(t.id)}>{t.l}</button>)}</div><input type="text" inputMode="decimal" placeholder="Сума" value={incAmt} onChange={e=>setIncAmt(e.target.value)} className="modal-i" autoFocus/><div className="qk-r">{[100,200,500,1000,1300,1500].map(a=><button key={a} className="qk" onClick={()=>setIncAmt(String(a))}>{a}</button>)}</div><button className="modal-s" onClick={addIncome} disabled={!incAmt}>Додати</button></div></div>}
-      {jarModal&&<div className="modal" onClick={()=>setJarModal(null)}><div className="modal-c" onClick={e=>e.stopPropagation()}><div style={{fontSize:36,textAlign:"center"}}>{JARS.find(j=>j.id===jarModal)?.emoji}</div><div className="modal-t">{JARS.find(j=>j.id===jarModal)?.name}</div><div className="pay-label">Чим платиш?</div><div className="tbtn-r"><button className={"tbtn"+(jarPay==="cash"?" on":"")} onClick={()=>setJarPay("cash")}>💵 Готівка ({fmtN(cashBal)})</button><button className={"tbtn"+(jarPay==="card"?" on":"")} onClick={()=>setJarPay("card")}>💳 Карта ({fmtN(cardBal)})</button></div><input type="text" inputMode="decimal" placeholder="Сума" value={jarAmt} onChange={e=>setJarAmt(e.target.value)} className="modal-i" autoFocus/><div className="qk-r">{[10,20,50,100,200,500].map(a=><button key={a} className="qk" onClick={()=>setJarAmt(String(a))}>{a}</button>)}</div><input type="text" placeholder="Коментар" value={jarCom} onChange={e=>setJarCom(e.target.value)} className="modal-i2"/><button className="modal-s" onClick={allocate} disabled={!jarAmt}>В банку</button></div></div>}
+      {jarModal&&<div className="modal" onClick={()=>setJarModal(null)}><div className="modal-c" onClick={e=>e.stopPropagation()}><div style={{fontSize:36,textAlign:"center"}}>{ALL_JARS.find(j=>j.id===jarModal)?.emoji}</div><div className="modal-t">{ALL_JARS.find(j=>j.id===jarModal)?.name}</div><div className="pay-label">Чим платиш?</div><div className="tbtn-r"><button className={"tbtn"+(jarPay==="cash"?" on":"")} onClick={()=>setJarPay("cash")}>💵 Готівка ({fmtN(cashBal)})</button><button className={"tbtn"+(jarPay==="card"?" on":"")} onClick={()=>setJarPay("card")}>💳 Карта ({fmtN(cardBal)})</button></div><input type="text" inputMode="decimal" placeholder="Сума" value={jarAmt} onChange={e=>setJarAmt(e.target.value)} className="modal-i" autoFocus/><div className="qk-r">{[10,20,50,100,200,500].map(a=><button key={a} className="qk" onClick={()=>setJarAmt(String(a))}>{a}</button>)}</div><input type="text" placeholder="Коментар" value={jarCom} onChange={e=>setJarCom(e.target.value)} className="modal-i2"/><button className="modal-s" onClick={allocate} disabled={!jarAmt}>{jarModal==="save"?"🏺 Відкласти":"В банку"}</button></div></div>}
       {goalModal&&<div className="modal" onClick={()=>setGoalModal(null)}><div className="modal-c" onClick={e=>e.stopPropagation()}>{(()=>{const g=goals.find(x=>x.id===goalModal);return(<><div style={{fontSize:36,textAlign:"center"}}>{g?.emoji}</div><div className="modal-t">{g?.name}</div><div style={{textAlign:"center",fontSize:13,color:"#8a7d65",marginBottom:12}}>{fmtN(goalSaved(goalModal))} / {g?.target} zł</div><div className="pay-label">Чим платиш?</div><div className="tbtn-r"><button className={"tbtn"+(goalPay==="cash"?" on":"")} onClick={()=>setGoalPay("cash")}>💵 Готівка ({fmtN(cashBal)})</button><button className={"tbtn"+(goalPay==="card"?" on":"")} onClick={()=>setGoalPay("card")}>💳 Карта ({fmtN(cardBal)})</button></div><input type="text" inputMode="decimal" placeholder="Сума" value={goalAmt} onChange={e=>setGoalAmt(e.target.value)} className="modal-i" autoFocus/><div className="qk-r">{[100,200,400,g?.target].filter(Boolean).map(a=><button key={a} className="qk" onClick={()=>setGoalAmt(String(a))}>{a}</button>)}</div><button className="modal-s orange" onClick={allocateGoal} disabled={!goalAmt}>🎯 Поповнити ціль</button></>);})()}</div></div>}
       {xferModal&&<div className="modal" onClick={()=>setXferModal(false)}><div className="modal-c" onClick={e=>e.stopPropagation()}><div className="modal-t">Переказ</div><div className="tbtn-r"><button className={"tbtn"+(xferDir==="cash2card"?" on":"")} onClick={()=>setXferDir("cash2card")}>💵→💳</button><button className={"tbtn"+(xferDir==="card2cash"?" on":"")} onClick={()=>setXferDir("card2cash")}>💳→💵</button></div><input type="text" inputMode="decimal" placeholder="Сума" value={xferAmt} onChange={e=>setXferAmt(e.target.value)} className="modal-i" autoFocus/><div className="qk-r">{[50,100,200,500,1000].map(a=><button key={a} className="qk" onClick={()=>setXferAmt(String(a))}>{a}</button>)}</div><button className="modal-s" onClick={doTransfer} disabled={!xferAmt}>Переказати</button></div></div>}
 
