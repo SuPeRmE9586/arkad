@@ -84,6 +84,7 @@ body{background:#0f0d0a;color:#d4c9b0;font-family:system-ui,-apple-system,sans-s
 .toast{position:fixed;top:72px;left:50%;transform:translateX(-50%);background:#1a1612;color:#F1C40F;padding:8px 20px;border-radius:16px;font-weight:700;font-size:14px;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,.6);border:1px solid #3d3520;white-space:nowrap}
 .sync-bar{background:#1a2a1a;border-radius:8px;padding:6px 12px;margin-bottom:10px;font-size:11px;color:#27AE60;text-align:center}
 .sync-bar.err{background:#2a1a1a;color:#FF6B6B}
+.sync-bar.pin{color:#E67E22;background:#2a1f12}
 .sync-bar.saving{color:#F1C40F;background:#2a2a12}
 .lvl-o{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:300;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .lvl-i{font-size:56px}.lvl-t{font-size:24px;font-weight:800;color:#F1C40F;margin-top:12px}.lvl-n{font-size:16px;color:#d4c9b0;margin-top:4px}
@@ -148,15 +149,23 @@ async function dbLoad(){
   }catch(e){return null;}
 }
 
-async function dbSave(data){
+// Запис у базу йде лише через функцію arkad_save, яка перевіряє PIN (див. supabase/secure-writes.sql)
+const PIN_KEY="arkad_pin";
+function loadPin(){try{return localStorage.getItem(PIN_KEY)||"";}catch(e){return "";}}
+function storePin(p){try{if(p)localStorage.setItem(PIN_KEY,p);else localStorage.removeItem(PIN_KEY);}catch(e){}}
+
+// Повертає "ok" | "pin" (PIN відсутній або невірний) | "err"
+async function dbSave(data,pin){
+  if(!pin)return "pin";
   try{
-    await fetch(`${SUPABASE_URL}/rest/v1/arkad?id=eq.main`,{
-      method:"PATCH",
-      headers:{"apikey":SUPABASE_KEY,"Authorization":`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json","Prefer":"return=minimal"},
-      body:JSON.stringify({data,updated_at:new Date().toISOString()})
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/rpc/arkad_save`,{
+      method:"POST",
+      headers:{"apikey":SUPABASE_KEY,"Authorization":`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json"},
+      body:JSON.stringify({p_data:data,p_pin:pin})
     });
-    return true;
-  }catch(e){return false;}
+    if(!r.ok)return "err";
+    return (await r.json())===true?"ok":"pin";
+  }catch(e){return "err";}
 }
 
 const JARS=[
@@ -223,7 +232,10 @@ function App(){
   const[openCat,setOpenCat]=useState(null);
   const[statMonth,setStatMonth]=useState(new Date().getMonth());
   const[questOpen,setQuestOpen]=useState(null);
+  const[pinModal,setPinModal]=useState(false);
+  const[pinInput,setPinInput]=useState("");
   const saveTimer=useRef(null);
+  const dataRef=useRef(null);
   const isFirst=useRef(true);
 
   useEffect(()=>{
@@ -252,11 +264,23 @@ function App(){
     if(isFirst.current){isFirst.current=false;return;}
     setSyncStatus("saving");
     if(saveTimer.current)clearTimeout(saveTimer.current);
-    saveTimer.current=setTimeout(async()=>{
-      const ok=await dbSave(data);
-      setSyncStatus(ok?"ok":"err");
-    },1000);
+    saveTimer.current=setTimeout(()=>doSave(data),1000);
   },[data]);
+
+  useEffect(()=>{dataRef.current=data;},[data]);
+
+  async function doSave(d){
+    setSyncStatus("saving");
+    const res=await dbSave(d,loadPin());
+    setSyncStatus(res);
+    if(res==="pin"){storePin("");setPinInput("");setPinModal(true);}
+  }
+
+  function submitPin(){
+    const p=pinInput.trim();if(!p)return;
+    storePin(p);setPinModal(false);
+    if(dataRef.current)doSave(dataRef.current);
+  }
 
   const now=new Date();
   const wS=mon(now);
@@ -347,8 +371,8 @@ function App(){
 
       <div className="ct">
         {tab==="main"&&<>
-          <div className={`sync-bar${syncStatus==="err"?" err":syncStatus==="saving"?" saving":""}`}>
-            {syncStatus==="ok"?"☁️ Дані збережені в хмарі":syncStatus==="saving"?"⏳ Збереження...":"❌ Помилка збереження — перевір інтернет"}
+          <div className={`sync-bar${syncStatus==="err"?" err":syncStatus==="saving"?" saving":syncStatus==="pin"?" pin":""}`}>
+            {syncStatus==="ok"?"☁️ Дані збережені в хмарі":syncStatus==="saving"?"⏳ Збереження...":syncStatus==="pin"?<span onClick={()=>setPinModal(true)} style={{cursor:"pointer"}}>🔒 Не збережено — введи PIN</span>:"❌ Помилка збереження — перевір інтернет"}
           </div>
           <div className="tip">📜 {tip}</div>
           <div className="sal">
@@ -404,6 +428,7 @@ function App(){
         </>}
       </div>
 
+      {pinModal&&<div className="modal" onClick={()=>setPinModal(false)}><div className="modal-c" onClick={e=>e.stopPropagation()}><div className="modal-t">🔒 PIN для збереження</div><div style={{textAlign:"center",fontSize:12,color:"#8a7d65",marginBottom:12}}>Вводиться один раз на цьому пристрої</div><input type="password" placeholder="PIN" value={pinInput} onChange={e=>setPinInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")submitPin();}} className="modal-i" autoFocus/><button className="modal-s" onClick={submitPin} disabled={!pinInput.trim()}>Зберегти</button></div></div>}
       {incModal&&<div className="modal" onClick={()=>setIncModal(false)}><div className="modal-c" onClick={e=>e.stopPropagation()}><div className="modal-t">Додати дохід</div><div className="tbtn-r">{[{id:"cash",l:"💵 Готівка"},{id:"card",l:"💳 Карта"}].map(t=><button key={t.id} className={"tbtn"+(incType===t.id?" on":"")} onClick={()=>setIncType(t.id)}>{t.l}</button>)}</div><input type="text" inputMode="decimal" placeholder="Сума" value={incAmt} onChange={e=>setIncAmt(e.target.value)} className="modal-i" autoFocus/><div className="qk-r">{[100,200,500,1000,1300,1500].map(a=><button key={a} className="qk" onClick={()=>setIncAmt(String(a))}>{a}</button>)}</div><button className="modal-s" onClick={addIncome} disabled={!incAmt}>Додати</button></div></div>}
       {jarModal&&<div className="modal" onClick={()=>setJarModal(null)}><div className="modal-c" onClick={e=>e.stopPropagation()}><div style={{fontSize:36,textAlign:"center"}}>{JARS.find(j=>j.id===jarModal)?.emoji}</div><div className="modal-t">{JARS.find(j=>j.id===jarModal)?.name}</div><div className="pay-label">Чим платиш?</div><div className="tbtn-r"><button className={"tbtn"+(jarPay==="cash"?" on":"")} onClick={()=>setJarPay("cash")}>💵 Готівка ({fmtN(cashBal)})</button><button className={"tbtn"+(jarPay==="card"?" on":"")} onClick={()=>setJarPay("card")}>💳 Карта ({fmtN(cardBal)})</button></div><input type="text" inputMode="decimal" placeholder="Сума" value={jarAmt} onChange={e=>setJarAmt(e.target.value)} className="modal-i" autoFocus/><div className="qk-r">{[10,20,50,100,200,500].map(a=><button key={a} className="qk" onClick={()=>setJarAmt(String(a))}>{a}</button>)}</div><input type="text" placeholder="Коментар" value={jarCom} onChange={e=>setJarCom(e.target.value)} className="modal-i2"/><button className="modal-s" onClick={allocate} disabled={!jarAmt}>В банку</button></div></div>}
       {goalModal&&<div className="modal" onClick={()=>setGoalModal(null)}><div className="modal-c" onClick={e=>e.stopPropagation()}>{(()=>{const g=goals.find(x=>x.id===goalModal);return(<><div style={{fontSize:36,textAlign:"center"}}>{g?.emoji}</div><div className="modal-t">{g?.name}</div><div style={{textAlign:"center",fontSize:13,color:"#8a7d65",marginBottom:12}}>{fmtN(goalSaved(goalModal))} / {g?.target} zł</div><div className="pay-label">Чим платиш?</div><div className="tbtn-r"><button className={"tbtn"+(goalPay==="cash"?" on":"")} onClick={()=>setGoalPay("cash")}>💵 Готівка ({fmtN(cashBal)})</button><button className={"tbtn"+(goalPay==="card"?" on":"")} onClick={()=>setGoalPay("card")}>💳 Карта ({fmtN(cardBal)})</button></div><input type="text" inputMode="decimal" placeholder="Сума" value={goalAmt} onChange={e=>setGoalAmt(e.target.value)} className="modal-i" autoFocus/><div className="qk-r">{[100,200,400,g?.target].filter(Boolean).map(a=><button key={a} className="qk" onClick={()=>setGoalAmt(String(a))}>{a}</button>)}</div><button className="modal-s orange" onClick={allocateGoal} disabled={!goalAmt}>🎯 Поповнити ціль</button></>);})()}</div></div>}
