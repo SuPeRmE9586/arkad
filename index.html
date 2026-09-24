@@ -84,6 +84,7 @@ body{background:#0f0d0a;color:#d4c9b0;font-family:system-ui,-apple-system,sans-s
 .toast{position:fixed;top:72px;left:50%;transform:translateX(-50%);background:#1a1612;color:#F1C40F;padding:8px 20px;border-radius:16px;font-weight:700;font-size:14px;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,.6);border:1px solid #3d3520;white-space:nowrap}
 .sync-bar{background:#1a2a1a;border-radius:8px;padding:6px 12px;margin-bottom:10px;font-size:11px;color:#27AE60;text-align:center}
 .sync-bar.err{background:#2a1a1a;color:#FF6B6B}
+.sync-bar.pin{color:#E67E22;background:#2a1f12}
 .sync-bar.saving{color:#F1C40F;background:#2a2a12}
 .lvl-o{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:300;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .lvl-i{font-size:56px}.lvl-t{font-size:24px;font-weight:800;color:#F1C40F;margin-top:12px}.lvl-n{font-size:16px;color:#d4c9b0;margin-top:4px}
@@ -118,6 +119,18 @@ body{background:#0f0d0a;color:#d4c9b0;font-family:system-ui,-apple-system,sans-s
 .qch{width:22px;height:22px;border-radius:11px;border:2px solid #5a4d35;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:800;flex-shrink:0}
 .qch.done{background:#27AE60;border-color:#27AE60}
 .qbtn{margin-top:10px;padding:10px;background:#27AE60;color:#fff;border:none;border-radius:6px;font-weight:700;font-size:14px;cursor:pointer;width:100%;font-family:inherit}
+.g-edit{background:none;border:none;font-size:13px;cursor:pointer;padding:2px 4px;margin-left:6px;opacity:.7}
+.goal-dl{font-size:11px;color:#8a7d65;margin-bottom:8px}
+.goal-dl.late{color:#FF6B6B}
+.lbl{font-size:11px;color:#6b6155;margin:0 0 4px 2px}
+.row2{display:flex;gap:8px}
+.btn-del{width:100%;padding:10px;margin-top:8px;font-size:13px;background:transparent;color:#FF6B6B;border:1px solid #3a1a1a;border-radius:10px;cursor:pointer;font-family:inherit}
+.wk-r{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
+.wk{flex:1;min-width:56px;text-align:center;padding:5px 2px;border-radius:6px;font-size:10px;background:#141210;color:#5a4d35;border:1px solid #222}
+.wk.ok{background:#1a2a1a;color:#27AE60;border-color:#1e3a1e}
+.wk.now{border-color:#F1C40F}
+.q-src{font-size:10px;color:#5a4d35;letter-spacing:1px;margin-top:10px}
+.q-prog{font-size:11px;color:#8a7d65}
 .rbtn{margin-top:28px;padding:10px;background:transparent;color:#5a4d35;border:1px solid #222;border-radius:6px;font-size:12px;cursor:pointer;width:100%;font-family:inherit}
 .dd{background:#1a1612;border-radius:10px;padding:12px;border:1px solid #222}
 .pay-label{text-align:center;font-size:12px;color:#8a7d65;margin-bottom:4px}
@@ -148,15 +161,33 @@ async function dbLoad(){
   }catch(e){return null;}
 }
 
-async function dbSave(data){
+// Запис у базу йде лише через функцію arkad_save, яка перевіряє PIN (див. supabase/secure-writes.sql)
+const PIN_KEY="arkad_pin";
+function loadPin(){try{return localStorage.getItem(PIN_KEY)||"";}catch(e){return "";}}
+function storePin(p){try{if(p)localStorage.setItem(PIN_KEY,p);else localStorage.removeItem(PIN_KEY);}catch(e){}}
+
+// Старий спосіб: прямий запис у таблицю. Працює, поки в базі не запущено supabase/secure-writes.sql
+async function dbSaveDirect(data){
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/arkad?id=eq.main`,{
+    method:"PATCH",
+    headers:{"apikey":SUPABASE_KEY,"Authorization":`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json","Prefer":"return=minimal"},
+    body:JSON.stringify({data,updated_at:new Date().toISOString()})
+  });
+  return r.ok?"ok":"err";
+}
+
+// Повертає "ok" | "pin" (PIN відсутній або невірний) | "err"
+async function dbSave(data,pin){
   try{
-    await fetch(`${SUPABASE_URL}/rest/v1/arkad?id=eq.main`,{
-      method:"PATCH",
-      headers:{"apikey":SUPABASE_KEY,"Authorization":`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json","Prefer":"return=minimal"},
-      body:JSON.stringify({data,updated_at:new Date().toISOString()})
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/rpc/arkad_save`,{
+      method:"POST",
+      headers:{"apikey":SUPABASE_KEY,"Authorization":`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json"},
+      body:JSON.stringify({p_data:data,p_pin:pin||""})
     });
-    return true;
-  }catch(e){return false;}
+    if(r.status===404)return await dbSaveDirect(data); // функції з PIN ще немає
+    if(!r.ok)return "err";
+    return (await r.json())===true?"ok":"pin";
+  }catch(e){return "err";}
 }
 
 const JARS=[
@@ -166,23 +197,65 @@ const JARS=[
   {id:"couple",name:"Удвох",emoji:"💑",color:"#E74C3C"},
 ];
 
-const GOALS_INIT=[
-  {id:"ins",name:"Страхування",emoji:"🛡️",target:2700,done:false,color:"#3498DB"},
-  {id:"canada",name:"Канада",emoji:"✈️",target:2000,done:false,color:"#E67E22"},
-  {id:"cyprus",name:"Кіпр",emoji:"🏖️",target:2400,done:false,color:"#27AE60"},
+// Цілі, які вже виконані (з першої версії) — при першому завантаженні позначаються як виконані
+const LEGACY_GOALS=["ins","canada","cyprus"];
+const GOAL_COLORS=["#3498DB","#E67E22","#27AE60","#9B59B6","#E74C3C","#1ABC9C","#F1C40F"];
+
+// Місячні квести за «Найбагатшою людиною у Вавилоні». Прогрес рахується автоматично з записів.
+const WEEKLY_SAVE=150;
+const ACTIVE_DAYS=15;
+const MONTH_QUESTS=[
+  {id:"tenth",title:"Перший закон золота",xp:100,src:"Ліки 1: Наповнюй свій гаманець",desc:"Відклади в цілі щонайменше 1/10 усього, що заробив цього місяця. «Частину всього, що заробляєш, залиш собі»."},
+  {id:"weekly",title:`Відкладай ${WEEKLY_SAVE} zł щотижня`,xp:150,src:"Ліки 1: Наповнюй свій гаманець",desc:`Кожного тижня цього місяця відклади в цілі щонайменше ${WEEKLY_SAVE} zł. Тиждень рахується за понеділком, з якого він починається.`},
+  {id:"track",title:"Знай, куди йде золото",xp:100,src:"Ліки 2: Контролюй витрати",desc:`Записуй доходи, витрати або відкладене щонайменше ${ACTIVE_DAYS} різних днів за місяць.`},
+  {id:"live",title:"Живи за коштами",xp:120,src:"Ліки 2: Контролюй витрати",desc:"Витрати разом із відкладеним за місяць не більші за дохід місяця. Нагороду можна забрати, коли місяць закінчиться."},
+];
+// Один «ручний» квест на місяць, по черзі
+const MANUAL_QUESTS=[
+  {id:"multiply",title:"Примнож своє золото",xp:80,src:"Ліки 3: Змушуй золото працювати",desc:"Розберися з одним способом змусити гроші працювати (депозит, облігації, ETF) і вирішив, чи підходить він тобі."},
+  {id:"guard",title:"Бережи скарб від втрат",xp:80,src:"Ліки 4: Бережи скарб від втрат",desc:"Цілий місяць: перед кожною покупкою понад 200 zł чекай добу. Не вкладай туди, де обіцяють швидкий заробіток."},
+  {id:"future",title:"Забезпеч майбутнє",xp:80,src:"Ліки 6: Забезпеч майбутній дохід",desc:"Створи ціль «Подушка безпеки» на суму твоїх витрат за 3 місяці і зроби перший внесок."},
+  {id:"skill",title:"Збільшуй здатність заробляти",xp:80,src:"Ліки 7: Збільшуй здатність заробляти",desc:"Витрать щонайменше 4 години цього місяця на навчання, яке підвищить твій заробіток."},
+  {id:"advice",title:"Порадься з мудрим",xp:80,src:"Закон золота 3: слухай тих, хто знається",desc:"Спитай поради про гроші в людини, яка вже досягла того, чого хочеш ти."},
+  {id:"home",title:"Зроби житло вигіднішим",xp:80,src:"Ліки 5: Зроби своє житло вигідним",desc:"Знайди, як зменшити витрати на житло: оренда, комуналка, інтернет, підписки."},
 ];
 
-const QUESTS=[
-  {id:1,title:"Закрити страхування",desc:"Накопич і заплати 2700 zł за страхування",xp:250,goalId:"ins"},
-  {id:2,title:"Накопити на Канаду",desc:"Накопич 2000 zł для подорожі до Канади",xp:200,goalId:"canada"},
-  {id:3,title:"Накопити на Кіпр",desc:"Накопич 2400 zł для подорожі на Кіпр",xp:230,goalId:"cyprus"},
-  {id:4,title:"Закрити всі цілі",desc:"Виконати всі три фінансові цілі",xp:500,goalId:null},
-];
+function monthKey(y,m){return y+"-"+String(m+1).padStart(2,"0");}
+function inMonth(d,y,m){const x=new Date(d);return x.getFullYear()===y&&x.getMonth()===m;}
+function sumA(arr){return Math.round(arr.reduce((s,a)=>s+a.amount,0)*100)/100;}
+
+// Рахує стан усіх квестів за місяць y/m
+function monthQuests(data,y,m,now){
+  const inc=sumA(data.incomes.filter(x=>inMonth(x.date,y,m)));
+  const spent=sumA(data.allocs.filter(x=>inMonth(x.date,y,m)));
+  const gA=data.goalAllocs||[];
+  const saved=sumA(gA.filter(x=>inMonth(x.date,y,m)));
+  const days=new Set([...data.incomes,...data.allocs,...gA,...(data.transfers||[])].filter(x=>inMonth(x.date,y,m)).map(x=>new Date(x.date).getDate())).size;
+  const over=now>new Date(y,m+1,1);
+  const weeks=[];
+  const dim=new Date(y,m+1,0).getDate();
+  for(let d=1;d<=dim;d++){const st=new Date(y,m,d);if(st.getDay()!==1)continue;const en=new Date(y,m,d+7);
+    const amt=sumA(gA.filter(x=>{const t=new Date(x.date);return t>=st&&t<en;}));
+    weeks.push({st,amt,ok:amt>=WEEKLY_SAVE,now:now>=st&&now<en});}
+  const tenthNeed=Math.round(inc*0.1*100)/100;
+  const res={
+    tenth:{done:inc>0&&saved>=tenthNeed,prog:inc>0?`${saved} / ${tenthNeed} zł`:"Ще немає доходу цього місяця"},
+    weekly:{done:weeks.length>0&&weeks.every(w=>w.ok),prog:`${weeks.filter(w=>w.ok).length} / ${weeks.length} тижнів`,weeks},
+    track:{done:days>=ACTIVE_DAYS,prog:`${days} / ${ACTIVE_DAYS} днів`},
+    live:{done:over&&inc-spent-saved>=0,prog:`${inc-spent-saved>=0?"✓":"✗"} залишок ${Math.round((inc-spent-saved)*100)/100} zł`+(over?"":" (перевірка в кінці місяця)")},
+  };
+  const man=MANUAL_QUESTS[(y*12+m)%MANUAL_QUESTS.length];
+  const claimed=(data.monthQ&&data.monthQ[monthKey(y,m)])||[];
+  const list=[...MONTH_QUESTS.map(q=>({...q,auto:true,...res[q.id]})),{...man,auto:false,done:claimed.includes(man.id),prog:"Відміть сам, коли виконаєш"}];
+  return list.map(q=>({...q,claimed:claimed.includes(q.id)}));
+}
 
 const LEVELS=[
   {lv:1,title:"Початківець",xp:0,ic:"🌱"},{lv:2,title:"Ощадливий",xp:200,ic:"💰"},
   {lv:3,title:"Дисциплінований",xp:500,ic:"⚔️"},{lv:4,title:"Стратег",xp:900,ic:"🏛️"},
-  {lv:5,title:"Майстер фінансів",xp:1500,ic:"👑"},
+  {lv:5,title:"Майстер фінансів",xp:1500,ic:"👑"},{lv:6,title:"Лихвар Матон",xp:2500,ic:"⚖️"},
+  {lv:7,title:"Купець Вавилону",xp:4000,ic:"🐪"},{lv:8,title:"Радник царя",xp:6000,ic:"📜"},
+  {lv:9,title:"Найбагатша людина Вавилону",xp:9000,ic:"🏺"},
 ];
 
 const TIPS=["«Частину всіх грошей, що заробляєш — залиш собі» — Аркад","Контролюй витрати щодня","Кожна злотна в банку — крок до свободи","Дисципліна сьогодні — свобода завтра","Готівка яку не записав — готівка яку втратив","Маленькі кроки щодня = великий результат"];
@@ -196,7 +269,7 @@ function r2(n){return Math.round(n*100)/100;}
 function parseNum(s){if(!s)return 0;return parseFloat(s.replace(",","."))||0;}
 function fmtN(n){return Number.isInteger(n)?n.toString():n.toFixed(2);}
 
-const EMPTY={incomes:[],allocs:[],goalAllocs:[],goals:GOALS_INIT,xp:0,doneQ:[],transfers:[]};
+const EMPTY={incomes:[],allocs:[],goalAllocs:[],goals:[],xp:0,doneQ:[],transfers:[],monthQ:{},v2:true};
 
 function App(){
   const[data,setData]=useState(null);
@@ -223,24 +296,26 @@ function App(){
   const[openCat,setOpenCat]=useState(null);
   const[statMonth,setStatMonth]=useState(new Date().getMonth());
   const[questOpen,setQuestOpen]=useState(null);
+  const[goalEdit,setGoalEdit]=useState(null);
+  const[showDone,setShowDone]=useState(false);
+  const[pinModal,setPinModal]=useState(false);
+  const[pinInput,setPinInput]=useState("");
   const saveTimer=useRef(null);
+  const dataRef=useRef(null);
   const isFirst=useRef(true);
 
   useEffect(()=>{
     dbLoad().then(d=>{
       if(d){
         if(!d.goalAllocs)d.goalAllocs=[];
-        if(!d.goals)d.goals=GOALS_INIT.map(g=>({...g}));
-        else{
-          // Merge: keep existing goal progress, add new goals if missing
-          const existingIds=d.goals.map(g=>g.id);
-          GOALS_INIT.forEach(gi=>{
-            if(!existingIds.includes(gi.id))d.goals.push({...gi});
-          });
-          // Remove old goals that are no longer in GOALS_INIT
-          d.goals=d.goals.filter(g=>GOALS_INIT.some(gi=>gi.id===g.id));
+        if(!d.goals)d.goals=[];
+        if(!d.v2){
+          // Старі цілі вже виконані — позначаємо їх, решту залишаємо як є
+          d.goals=d.goals.map(g=>LEGACY_GOALS.includes(g.id)?{...g,done:true}:g);
+          d.v2=true;
         }
         if(!d.transfers)d.transfers=[];
+        if(!d.monthQ)d.monthQ={};
         setData(d);
       }
       setLoading(false);
@@ -252,11 +327,23 @@ function App(){
     if(isFirst.current){isFirst.current=false;return;}
     setSyncStatus("saving");
     if(saveTimer.current)clearTimeout(saveTimer.current);
-    saveTimer.current=setTimeout(async()=>{
-      const ok=await dbSave(data);
-      setSyncStatus(ok?"ok":"err");
-    },1000);
+    saveTimer.current=setTimeout(()=>doSave(data),1000);
   },[data]);
+
+  useEffect(()=>{dataRef.current=data;},[data]);
+
+  async function doSave(d){
+    setSyncStatus("saving");
+    const res=await dbSave(d,loadPin());
+    setSyncStatus(res);
+    if(res==="pin"){storePin("");setPinInput("");setPinModal(true);}
+  }
+
+  function submitPin(){
+    const p=pinInput.trim();if(!p)return;
+    storePin(p);setPinModal(false);
+    if(dataRef.current)doSave(dataRef.current);
+  }
 
   const now=new Date();
   const wS=mon(now);
@@ -293,15 +380,41 @@ function App(){
   function showT(m){setToast(m);setTimeout(()=>setToast(""),1800);}
 
   function addIncome(){const a=parseNum(incAmt);if(!a||a<=0)return;const nx=doXP(15);setData(p=>({...p,incomes:[...p.incomes,{id:Date.now(),amount:r2(a),type:incType,date:new Date().toISOString()}],xp:nx}));setIncAmt("");setIncModal(false);showT("💵 +"+fmtN(r2(a))+" zł");}
-  function allocate(){const a=parseNum(jarAmt);if(!a||a<=0||!jarModal)return;const srcBal=jarPay==="cash"?cashBal:cardBal;if(a>srcBal){showT("❌ Не вистачає!");return;}const nx=doXP(10);setData(p=>({...p,allocs:[...p.allocs,{id:Date.now(),jarId:jarModal,amount:r2(a),comment:jarCom,payFrom:jarPay,date:new Date().toISOString()}],xp:nx}));setJarAmt("");setJarCom("");setJarModal(null);showT("✓ В банку!");}
-  function allocateGoal(){const a=parseNum(goalAmt);if(!a||a<=0||!goalModal)return;const srcBal=goalPay==="cash"?cashBal:cardBal;if(a>srcBal){showT("❌ Не вистачає!");return;}const nx=doXP(15);setData(p=>({...p,goalAllocs:[...(p.goalAllocs||[]),{id:Date.now(),goalId:goalModal,amount:r2(a),payFrom:goalPay,date:new Date().toISOString()}],xp:nx}));setGoalAmt("");setGoalModal(null);showT("🎯 В ціль!");}
-  function markGoalDone(gid){setData(p=>({...p,goals:p.goals.map(g=>g.id===gid?{...g,done:true}:g)}));showT("✅ Ціль виконана!");}
+  function allocate(){const a=parseNum(jarAmt);if(!a||a<=0||!jarModal)return;const minus=a>(jarPay==="cash"?cashBal:cardBal);const nx=doXP(10);setData(p=>({...p,allocs:[...p.allocs,{id:Date.now(),jarId:jarModal,amount:r2(a),comment:jarCom,payFrom:jarPay,date:new Date().toISOString()}],xp:nx}));setJarAmt("");setJarCom("");setJarModal(null);showT(minus?"✓ Записано (у мінус)":"✓ В банку!");}
+  function allocateGoal(){const a=parseNum(goalAmt);if(!a||a<=0||!goalModal)return;const minus=a>(goalPay==="cash"?cashBal:cardBal);const nx=doXP(15);setData(p=>({...p,goalAllocs:[...(p.goalAllocs||[]),{id:Date.now(),goalId:goalModal,amount:r2(a),payFrom:goalPay,date:new Date().toISOString()}],xp:nx}));setGoalAmt("");setGoalModal(null);showT(minus?"🎯 В ціль (у мінус)":"🎯 В ціль!");}
+  function markGoalDone(gid,done=true){setData(p=>({...p,goals:p.goals.map(g=>g.id===gid?{...g,done}:g)}));showT(done?"✅ Ціль виконана!":"↩ Ціль знову активна");}
+  function openGoalEdit(g){setGoalEdit(g?{id:g.id,emoji:g.emoji||"",name:g.name,target:String(g.target),deadline:g.deadline||""}:{id:null,emoji:"",name:"",target:"",deadline:""});}
+  function saveGoal(){
+    const e=goalEdit;const name=e.name.trim();const t=parseNum(e.target);if(!name||!t||t<=0)return;
+    const emoji=e.emoji.trim()||"🎯";const deadline=e.deadline||null;
+    setData(p=>{const gs=p.goals||[];
+      if(e.id)return{...p,goals:gs.map(g=>g.id===e.id?{...g,name,emoji,target:r2(t),deadline}:g)};
+      return{...p,goals:[...gs,{id:"g"+Date.now(),name,emoji,target:r2(t),deadline,done:false,color:GOAL_COLORS[gs.length%GOAL_COLORS.length]}]};});
+    setGoalEdit(null);showT(e.id?"✏️ Ціль оновлено":"🎯 Нова ціль!");
+  }
+  function deleteGoal(gid){
+    const sv=goalSaved(gid);
+    if(!confirm(sv>0?`Видалити ціль? Відкладені ${fmtN(sv)} zł повернуться в баланс.`:"Видалити ціль?"))return;
+    setData(p=>({...p,goals:p.goals.filter(g=>g.id!==gid),goalAllocs:(p.goalAllocs||[]).filter(a=>a.goalId!==gid)}));setGoalEdit(null);
+  }
+  function goalDeadline(g){
+    if(!g.deadline)return null;
+    const dl=new Date(g.deadline+"T23:59:59");const days=Math.ceil((dl-now)/86400000);const left=r2(g.target-goalSaved(g.id));
+    const dStr=new Date(g.deadline).toLocaleDateString("uk-UA",{day:"numeric",month:"short",year:"numeric"});
+    if(left<=0)return{late:false,t:`📅 до ${dStr} · зібрано!`};
+    if(days<=0)return{late:true,t:`⏰ Дедлайн ${dStr} минув · бракує ${fmtN(left)} zł`};
+    const perW=r2(left/Math.max(days/7,1));
+    return{late:false,t:`📅 до ${dStr} · ${days} дн · ~${fmtN(perW)} zł/тиждень`};
+  }
   function doTransfer(){const a=parseNum(xferAmt);if(!a||a<=0)return;setData(p=>({...p,transfers:[...(p.transfers||[]),{id:Date.now(),amount:r2(a),dir:xferDir,date:new Date().toISOString()}]}));setXferAmt("");setXferModal(false);showT("↔ Переказ "+fmtN(r2(a))+" zł");}
   function delAlloc(id){setData(p=>({...p,allocs:p.allocs.filter(a=>a.id!==id)}));}
   function delGoalAlloc(id){setData(p=>({...p,goalAllocs:(p.goalAllocs||[]).filter(a=>a.id!==id)}));}
   function delInc(id){setData(p=>({...p,incomes:p.incomes.filter(i=>i.id!==id)}));}
-  function doQuest(qid){if(data.doneQ.includes(qid))return;const q=QUESTS.find(x=>x.id===qid);const nx=doXP(q.xp);setData(p=>({...p,doneQ:[...p.doneQ,qid],xp:nx}));}
-  function resetAll(){if(confirm("Видалити ВСІ дані?")){setData({...EMPTY,goals:GOALS_INIT.map(g=>({...g}))});}}
+  function claimQuest(key,q){
+    const cl=(data.monthQ&&data.monthQ[key])||[];if(cl.includes(q.id))return;
+    const nx=doXP(q.xp);setData(p=>({...p,monthQ:{...(p.monthQ||{}),[key]:[...(((p.monthQ||{})[key])||[]),q.id]},xp:nx}));showT("⚔️ +"+q.xp+" XP");
+  }
+  function resetAll(){if(confirm("Видалити ВСІ дані?")){setData({...EMPTY});}}
 
   const dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
   const fd=new Date(now.getFullYear(),now.getMonth(),1).getDay();
@@ -321,20 +434,20 @@ function App(){
       <h1 className="ob-t">Шлях Аркада</h1>
       <p className="ob-s">Розподіляй зарплату по банках<br/>та досягай своїх фінансових цілей</p>
       <div className="ob-c"><p className="ob-q">«Частину всіх грошей, що заробляєш — залиш собі»</p><p className="ob-a">— Аркад</p></div>
-      <div className="ob-b">
-        <div style={{color:"#F1C40F",fontSize:11,letterSpacing:2,marginBottom:8}}>МОЇ ЦІЛІ</div>
-        {GOALS_INIT.map(g=><div key={g.id} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",fontSize:13}}><span>{g.emoji} {g.name}</span><span style={{color:g.color,fontWeight:700}}>{g.target} zł</span></div>)}
-        <div style={{marginTop:10,paddingTop:8,borderTop:"1px solid #2d2518",display:"flex",justifyContent:"space-between",fontSize:12,color:"#8a7d65"}}><span>Загалом:</span><span style={{color:"#E67E22",fontWeight:700}}>7 100 zł</span></div>
-      </div>
-      <button className="start" onClick={()=>setData({...EMPTY,goals:GOALS_INIT.map(g=>({...g}))})}>⚔️ Почати подорож</button>
+      <button className="start" onClick={()=>setData({...EMPTY})}>⚔️ Почати подорож</button>
     </div>
   );
 
-  const goals=data.goals||GOALS_INIT;
+  const goals=data.goals||[];
   const activeGoals=goals.filter(g=>!g.done);
   const doneGoals=goals.filter(g=>g.done);
-  const totalGoalTarget=goals.reduce((s,g)=>s+g.target,0);
-  const totalGoalSaved=r2(goals.reduce((s,g)=>s+goalSaved(g.id),0));
+  const totalGoalTarget=r2(activeGoals.reduce((s,g)=>s+g.target,0));
+  const totalGoalSaved=r2(activeGoals.reduce((s,g)=>s+goalSaved(g.id),0));
+  const curKey=monthKey(now.getFullYear(),now.getMonth());
+  const curQ=monthQuests(data,now.getFullYear(),now.getMonth(),now);
+  const prevY=now.getMonth()===0?now.getFullYear()-1:now.getFullYear();const prevM=(now.getMonth()+11)%12;
+  const prevKey=monthKey(prevY,prevM);
+  const prevQ=monthQuests(data,prevY,prevM,now).filter(q=>q.auto&&q.done&&!q.claimed);
 
   return(
     <div className="app">
@@ -347,8 +460,8 @@ function App(){
 
       <div className="ct">
         {tab==="main"&&<>
-          <div className={`sync-bar${syncStatus==="err"?" err":syncStatus==="saving"?" saving":""}`}>
-            {syncStatus==="ok"?"☁️ Дані збережені в хмарі":syncStatus==="saving"?"⏳ Збереження...":"❌ Помилка збереження — перевір інтернет"}
+          <div className={`sync-bar${syncStatus==="err"?" err":syncStatus==="saving"?" saving":syncStatus==="pin"?" pin":""}`}>
+            {syncStatus==="ok"?"☁️ Дані збережені в хмарі":syncStatus==="saving"?"⏳ Збереження...":syncStatus==="pin"?<span onClick={()=>setPinModal(true)} style={{cursor:"pointer"}}>🔒 Не збережено — введи PIN</span>:"❌ Помилка збереження — перевір інтернет"}
           </div>
           <div className="tip">📜 {tip}</div>
           <div className="sal">
@@ -367,13 +480,15 @@ function App(){
           <div className="j-title">Банки</div>
           <div className="j-grid">{JARS.map(j=>{const sp=wAll(j.id);return(<button key={j.id} className="j-card" onClick={()=>{setJarModal(j.id);setJarAmt("");setJarCom("");setJarPay("cash");}}><div className="j-em">{j.emoji}</div><div className="j-nm">{j.name}</div><div className="j-am" style={{color:j.color}}>{fmtN(sp)} zł</div><span className="j-hb" onClick={e=>{e.stopPropagation();setJarHist(jarHist===j.id?null:j.id);}}>📋</span></button>);})}</div>
           {jarHist&&<div className="hist"><div className="hist-t"><span>{JARS.find(j=>j.id===jarHist)?.emoji} {JARS.find(j=>j.id===jarHist)?.name}</span><button className="cls" onClick={()=>setJarHist(null)}>✕</button></div>{jHist(jarHist).length===0?<div className="emp">Поки пусто</div>:jHist(jarHist).map(a=>(<div key={a.id} className="hist-r"><div><div className="hist-a">{a.payFrom==="cash"?"💵":"💳"} {fmtN(a.amount)} zł</div>{a.comment&&<div className="hist-c">{a.comment}</div>}<div className="hist-d">{new Date(a.date).toLocaleDateString("uk-UA",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</div></div><button className="del" onClick={()=>delAlloc(a.id)}>🗑️</button></div>))}</div>}
-          <div className="goal-title">🎯 Мої цілі ({fmtN(totalGoalSaved)} / {totalGoalTarget} zł)</div>
-          <div style={{background:"#1a1612",borderRadius:10,padding:"10px 14px",marginBottom:14,border:"1px solid #2d1f0a"}}>
+          <div className="goal-title">🎯 Мої цілі{activeGoals.length>0&&` (${fmtN(totalGoalSaved)} / ${fmtN(totalGoalTarget)} zł)`}</div>
+          {activeGoals.length>1&&<div style={{background:"#1a1612",borderRadius:10,padding:"10px 14px",marginBottom:14,border:"1px solid #2d1f0a"}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,fontSize:12}}><span style={{color:"#8a7d65"}}>Загальний прогрес</span><span style={{color:"#E67E22",fontWeight:700}}>{Math.round((totalGoalSaved/totalGoalTarget)*100)}%</span></div>
             <div className="goal-bar" style={{marginBottom:0}}><div className="goal-fill" style={{width:Math.min((totalGoalSaved/totalGoalTarget)*100,100)+"%",backgroundColor:"#E67E22"}}/></div>
-          </div>
-          {activeGoals.map(g=>{const saved=goalSaved(g.id);const pct=Math.min((saved/g.target)*100,100);const gAllocs=(data.goalAllocs||[]).filter(a=>a.goalId===g.id).sort((a,b)=>new Date(b.date)-new Date(a.date));return(<div key={g.id} className="goal-card"><div className="goal-header"><span className="goal-name">{g.emoji} {g.name}</span><span className="goal-badge">{Math.round(pct)}%</span></div><div className="goal-amounts"><span className="goal-saved">{fmtN(saved)} zł</span><span className="goal-target">з {g.target} zł</span></div><div className="goal-bar"><div className="goal-fill" style={{width:pct+"%",backgroundColor:g.color}}/></div><div className="goal-actions"><button className="goal-btn" onClick={()=>{setGoalModal(g.id);setGoalAmt("");setGoalPay("cash");}}>+ Поповнити</button>{saved>=g.target&&<button className="goal-done-btn" onClick={()=>markGoalDone(g.id)}>✓ Виконано</button>}</div>{gAllocs.length>0&&<div style={{marginTop:8,borderTop:"1px solid #222",paddingTop:8}}>{gAllocs.slice(0,3).map(a=>(<div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",fontSize:12}}><span style={{color:"#8a7d65"}}>{a.payFrom==="cash"?"💵":"💳"} {fmtN(a.amount)} zł — {new Date(a.date).toLocaleDateString("uk-UA",{day:"numeric",month:"short"})}</span><button className="del" style={{fontSize:11}} onClick={()=>delGoalAlloc(a.id)}>🗑️</button></div>))}</div>}</div>);})}
-          {doneGoals.map(g=>(<div key={g.id} className="goal-card done"><div className="goal-header"><span className="goal-name">{g.emoji} {g.name}</span><span className="goal-badge done">✓ Виконано</span></div></div>))}
+          </div>}
+          {activeGoals.length===0&&<div className="emp">Активних цілей немає. Додай нову 👇</div>}
+          {activeGoals.map(g=>{const saved=goalSaved(g.id);const pct=Math.min((saved/g.target)*100,100);const dl=goalDeadline(g);const gAllocs=(data.goalAllocs||[]).filter(a=>a.goalId===g.id).sort((a,b)=>new Date(b.date)-new Date(a.date));return(<div key={g.id} className="goal-card"><div className="goal-header"><span className="goal-name">{g.emoji} {g.name}<button className="g-edit" onClick={()=>openGoalEdit(g)}>✏️</button></span><span className="goal-badge">{Math.round(pct)}%</span></div><div className="goal-amounts"><span className="goal-saved">{fmtN(saved)} zł</span><span className="goal-target">з {fmtN(g.target)} zł</span></div><div className="goal-bar"><div className="goal-fill" style={{width:pct+"%",backgroundColor:g.color}}/></div>{dl&&<div className={"goal-dl"+(dl.late?" late":"")}>{dl.t}</div>}<div className="goal-actions"><button className="goal-btn" onClick={()=>{setGoalModal(g.id);setGoalAmt("");setGoalPay("cash");}}>+ Поповнити</button><button className="goal-done-btn" onClick={()=>markGoalDone(g.id)}>✓ Виконано</button></div>{gAllocs.length>0&&<div style={{marginTop:8,borderTop:"1px solid #222",paddingTop:8}}>{gAllocs.slice(0,3).map(a=>(<div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",fontSize:12}}><span style={{color:"#8a7d65"}}>{a.payFrom==="cash"?"💵":"💳"} {fmtN(a.amount)} zł — {new Date(a.date).toLocaleDateString("uk-UA",{day:"numeric",month:"short"})}</span><button className="del" style={{fontSize:11}} onClick={()=>delGoalAlloc(a.id)}>🗑️</button></div>))}</div>}</div>);})}
+          <div className="btn-row"><button className="btn-add" style={{color:"#E67E22",borderColor:"#3d2a0e"}} onClick={()=>openGoalEdit(null)}>+ Нова ціль</button>{doneGoals.length>0&&<button className="btn-add" style={{color:"#27AE60",borderColor:"#1e3a1e"}} onClick={()=>setShowDone(!showDone)}>✓ Виконані ({doneGoals.length}) {showDone?"▲":"▼"}</button>}</div>
+          {showDone&&doneGoals.map(g=>(<div key={g.id} className="goal-card done"><div className="goal-header"><span className="goal-name">{g.emoji} {g.name}</span><span className="goal-badge done">✓ {fmtN(goalSaved(g.id))} zł</span></div><div className="goal-actions"><button className="goal-btn" onClick={()=>markGoalDone(g.id,false)}>↩ Повернути</button><button className="goal-btn" style={{color:"#8a7d65"}} onClick={()=>openGoalEdit(g)}>✏️ Змінити</button></div></div>))}
           {data.incomes.filter(i=>{const d=new Date(i.date);return d>=wS&&d<=wE;}).length>0&&<div className="hist"><div className="hist-t">💰 Доходи тижня</div>{[...data.incomes].filter(i=>{const d=new Date(i.date);return d>=wS&&d<=wE;}).reverse().map(i=>(<div key={i.id} className="hist-r"><div><div className="hist-a">{i.type==="cash"?"💵":"💳"} +{fmtN(i.amount)} zł</div><div className="hist-d">{new Date(i.date).toLocaleDateString("uk-UA",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</div></div><button className="del" onClick={()=>delInc(i.id)}>🗑️</button></div>))}</div>}
         </>}
 
@@ -383,7 +498,7 @@ function App(){
           <div className="sec">По банках</div>
           {JARS.map(j=>{const m=mAllocsJar(j.id,statMonth);const details=mAllocsDetail(j.id,statMonth);const isOpen=openCat===j.id;return(<div key={j.id}><div className="cat-row" onClick={()=>setOpenCat(isOpen?null:j.id)}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:14}}>{j.emoji} {j.name} <span style={{fontSize:11,color:"#5a4d35"}}>{isOpen?"▲":"▼"}</span></span><span style={{color:j.color,fontSize:14,fontWeight:700}}>{fmtN(m)} zł</span></div><div className="mb"><div className="mbf" style={{width:Math.min(m/100*10,100)+"%",backgroundColor:j.color}}/></div></div>{isOpen&&<div className="cat-detail">{details.length===0?<div className="emp">Немає записів</div>:details.map(a=>(<div key={a.id} className="cat-detail-r"><div><div style={{fontSize:13,fontWeight:600}}>{a.payFrom==="cash"?"💵":"💳"} {fmtN(a.amount)} zł</div>{a.comment&&<div style={{fontSize:11,color:"#8a7d65",marginTop:2}}>{a.comment}</div>}<div style={{fontSize:10,color:"#5a4d35",marginTop:2}}>{new Date(a.date).toLocaleDateString("uk-UA",{day:"numeric",month:"long"})}</div></div><button className="del" onClick={()=>delAlloc(a.id)}>🗑️</button></div>))}</div>}</div>);})}
           <div className="sec" style={{marginTop:16}}>Цілі — загальний прогрес</div>
-          {goals.map(g=>{const saved=goalSaved(g.id);const pct=Math.min((saved/g.target)*100,100);return(<div key={g.id} style={{marginBottom:10,padding:"10px 12px",background:"#1a1612",borderRadius:10,border:"1px solid #222"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13}}>{g.emoji} {g.name} {g.done?"✅":""}</span><span style={{color:g.color,fontWeight:700,fontSize:13}}>{fmtN(saved)} / {g.target} zł</span></div><div className="mb"><div className="mbf" style={{width:pct+"%",backgroundColor:g.color}}/></div></div>);})}
+          {goals.map(g=>{const saved=goalSaved(g.id);const pct=g.target>0?Math.min((saved/g.target)*100,100):0;return(<div key={g.id} style={{marginBottom:10,padding:"10px 12px",background:"#1a1612",borderRadius:10,border:"1px solid #222"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13}}>{g.emoji} {g.name} {g.done?"✅":""}</span><span style={{color:g.color,fontWeight:700,fontSize:13}}>{fmtN(saved)} / {g.target} zł</span></div><div className="mb"><div className="mbf" style={{width:pct+"%",backgroundColor:g.color}}/></div></div>);})}
         </>}
 
         {tab==="cal"&&<>
@@ -393,17 +508,22 @@ function App(){
         </>}
 
         {tab==="quests"&&<>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div className="sec">Квести</div><span style={{color:"#8a7d65",fontSize:13}}>{data.doneQ.length}/{QUESTS.length}</span></div>
-          <div style={{background:"#1a1a12",borderRadius:10,padding:"10px 12px",marginBottom:14,border:"1px solid #2a2a12"}}>
-            <div style={{fontSize:11,color:"#5a4d35",marginBottom:4}}>ЗАГАЛЬНИЙ ПРОГРЕС</div>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:13,color:"#8a7d65"}}>Накопичено</span><span style={{fontSize:13,fontWeight:700,color:"#E67E22"}}>{fmtN(totalGoalSaved)} / {totalGoalTarget} zł</span></div>
-            <div className="mb"><div className="mbf" style={{width:Math.min((totalGoalSaved/totalGoalTarget)*100,100)+"%",backgroundColor:"#E67E22"}}/></div>
-          </div>
-          {QUESTS.map(q=>{const dn=data.doneQ.includes(q.id);const op=questOpen===q.id;const relGoal=q.goalId?goals.find(g=>g.id===q.goalId):null;return(<div key={q.id} className="qcard"><div className="qm" onClick={()=>setQuestOpen(op?null:q.id)}><div style={{display:"flex",alignItems:"center",gap:10}}><div className={"qch"+(dn?" done":"")}>{dn&&"✓"}</div><div><div style={{fontWeight:600,fontSize:14,opacity:dn?.5:1,textDecoration:dn?"line-through":"none"}}>{q.title}</div><div style={{color:"#F1C40F",fontSize:11}}>+{q.xp} XP</div></div></div><span style={{color:"#5a4d35"}}>{op?"▲":"▼"}</span></div>{op&&<div style={{padding:"0 14px 14px",borderTop:"1px solid #222"}}><div style={{color:"#8a7d65",fontSize:13,marginTop:12,lineHeight:1.5}}>{q.desc}</div>{relGoal&&<div style={{marginTop:8,background:"#141210",borderRadius:8,padding:"8px 10px"}}><div style={{fontSize:11,color:"#5a4d35",marginBottom:4}}>ПРОГРЕС ЦІЛІ</div><div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}><span>{relGoal.emoji} {relGoal.name}</span><span style={{color:relGoal.color,fontWeight:700}}>{fmtN(goalSaved(relGoal.id))} / {relGoal.target} zł</span></div><div className="mb"><div className="mbf" style={{width:Math.min((goalSaved(relGoal.id)/relGoal.target)*100,100)+"%",backgroundColor:relGoal.color}}/></div></div>}{!dn&&<button className="qbtn" onClick={()=>doQuest(q.id)}>✓ Виконано!</button>}</div>}</div>);})}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}><div className="sec" style={{marginBottom:0}}>Квести на {MN[now.getMonth()].toLowerCase()}</div><span style={{color:"#8a7d65",fontSize:13}}>{curQ.filter(q=>q.claimed).length}/{curQ.length}</span></div>
+          <div className="tip">📜 Сім ліків від порожнього гаманця Аркада. Нові квести щомісяця, прогрес рахується сам із твоїх записів.</div>
+          {prevQ.length>0&&<div className="hist" style={{borderColor:"#3d3520"}}><div className="hist-t">🏺 Нагороди за {MN[prevM].toLowerCase()}</div>{prevQ.map(q=>(<div key={q.id} className="hist-r"><div><div style={{fontWeight:600,fontSize:13}}>{q.title}</div><div className="q-prog">{q.prog}</div></div><button className="goal-done-btn" onClick={()=>claimQuest(prevKey,q)}>+{q.xp} XP</button></div>))}</div>}
+          {curQ.map(q=>{const op=questOpen===q.id;const dn=q.claimed;return(<div key={q.id} className="qcard"><div className="qm" onClick={()=>setQuestOpen(op?null:q.id)}><div style={{display:"flex",alignItems:"center",gap:10}}><div className={"qch"+(dn?" done":"")}>{dn?"✓":q.done?"!":""}</div><div><div style={{fontWeight:600,fontSize:14,opacity:dn?.5:1,textDecoration:dn?"line-through":"none"}}>{q.title}</div><div style={{fontSize:11}}><span style={{color:"#F1C40F"}}>+{q.xp} XP</span>{!dn&&<span className="q-prog"> · {q.prog}</span>}</div></div></div><span style={{color:"#5a4d35"}}>{op?"▲":"▼"}</span></div>{op&&<div style={{padding:"0 14px 14px",borderTop:"1px solid #222"}}><div className="q-src">{q.src.toUpperCase()}</div><div style={{color:"#8a7d65",fontSize:13,marginTop:6,lineHeight:1.5}}>{q.desc}</div>{q.weeks&&<div className="wk-r">{q.weeks.map((w,i)=>(<div key={i} className={"wk"+(w.ok?" ok":"")+(w.now?" now":"")}>{fmt(w.st)}<br/>{fmtN(w.amt)} zł</div>))}</div>}{!dn&&(q.auto?(q.done&&<button className="qbtn" onClick={()=>claimQuest(curKey,q)}>🏆 Забрати +{q.xp} XP</button>):<button className="qbtn" onClick={()=>claimQuest(curKey,q)}>✓ Виконано!</button>)}</div>}</div>);})}
           <button className="rbtn" onClick={resetAll}>Скинути всі дані</button>
         </>}
       </div>
 
+      {goalEdit&&<div className="modal" onClick={()=>setGoalEdit(null)}><div className="modal-c" onClick={e=>e.stopPropagation()}><div className="modal-t">{goalEdit.id?"Змінити ціль":"Нова ціль"}</div>
+        <div className="row2"><div style={{width:72}}><div className="lbl">Іконка</div><input type="text" placeholder="🎯" value={goalEdit.emoji} onChange={e=>setGoalEdit({...goalEdit,emoji:e.target.value})} className="modal-i2"/></div><div style={{flex:1}}><div className="lbl">Назва</div><input type="text" placeholder="Напр. Подушка безпеки" value={goalEdit.name} onChange={e=>setGoalEdit({...goalEdit,name:e.target.value})} className="modal-i2" autoFocus/></div></div>
+        <div className="lbl">Ціна, zł</div><input type="text" inputMode="decimal" placeholder="Сума" value={goalEdit.target} onChange={e=>setGoalEdit({...goalEdit,target:e.target.value})} className="modal-i"/>
+        <div className="lbl">Дедлайн (необовʼязково)</div><input type="date" value={goalEdit.deadline} onChange={e=>setGoalEdit({...goalEdit,deadline:e.target.value})} className="modal-i2" style={{colorScheme:"dark"}}/>
+        <button className="modal-s orange" onClick={saveGoal} disabled={!goalEdit.name.trim()||!(parseNum(goalEdit.target)>0)}>{goalEdit.id?"Зберегти":"🎯 Додати ціль"}</button>
+        {goalEdit.id&&<button className="btn-del" onClick={()=>deleteGoal(goalEdit.id)}>🗑️ Видалити ціль</button>}
+      </div></div>}
+      {pinModal&&<div className="modal" onClick={()=>setPinModal(false)}><div className="modal-c" onClick={e=>e.stopPropagation()}><div className="modal-t">🔒 PIN для збереження</div><div style={{textAlign:"center",fontSize:12,color:"#8a7d65",marginBottom:12}}>Вводиться один раз на цьому пристрої</div><input type="password" placeholder="PIN" value={pinInput} onChange={e=>setPinInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")submitPin();}} className="modal-i" autoFocus/><button className="modal-s" onClick={submitPin} disabled={!pinInput.trim()}>Зберегти</button></div></div>}
       {incModal&&<div className="modal" onClick={()=>setIncModal(false)}><div className="modal-c" onClick={e=>e.stopPropagation()}><div className="modal-t">Додати дохід</div><div className="tbtn-r">{[{id:"cash",l:"💵 Готівка"},{id:"card",l:"💳 Карта"}].map(t=><button key={t.id} className={"tbtn"+(incType===t.id?" on":"")} onClick={()=>setIncType(t.id)}>{t.l}</button>)}</div><input type="text" inputMode="decimal" placeholder="Сума" value={incAmt} onChange={e=>setIncAmt(e.target.value)} className="modal-i" autoFocus/><div className="qk-r">{[100,200,500,1000,1300,1500].map(a=><button key={a} className="qk" onClick={()=>setIncAmt(String(a))}>{a}</button>)}</div><button className="modal-s" onClick={addIncome} disabled={!incAmt}>Додати</button></div></div>}
       {jarModal&&<div className="modal" onClick={()=>setJarModal(null)}><div className="modal-c" onClick={e=>e.stopPropagation()}><div style={{fontSize:36,textAlign:"center"}}>{JARS.find(j=>j.id===jarModal)?.emoji}</div><div className="modal-t">{JARS.find(j=>j.id===jarModal)?.name}</div><div className="pay-label">Чим платиш?</div><div className="tbtn-r"><button className={"tbtn"+(jarPay==="cash"?" on":"")} onClick={()=>setJarPay("cash")}>💵 Готівка ({fmtN(cashBal)})</button><button className={"tbtn"+(jarPay==="card"?" on":"")} onClick={()=>setJarPay("card")}>💳 Карта ({fmtN(cardBal)})</button></div><input type="text" inputMode="decimal" placeholder="Сума" value={jarAmt} onChange={e=>setJarAmt(e.target.value)} className="modal-i" autoFocus/><div className="qk-r">{[10,20,50,100,200,500].map(a=><button key={a} className="qk" onClick={()=>setJarAmt(String(a))}>{a}</button>)}</div><input type="text" placeholder="Коментар" value={jarCom} onChange={e=>setJarCom(e.target.value)} className="modal-i2"/><button className="modal-s" onClick={allocate} disabled={!jarAmt}>В банку</button></div></div>}
       {goalModal&&<div className="modal" onClick={()=>setGoalModal(null)}><div className="modal-c" onClick={e=>e.stopPropagation()}>{(()=>{const g=goals.find(x=>x.id===goalModal);return(<><div style={{fontSize:36,textAlign:"center"}}>{g?.emoji}</div><div className="modal-t">{g?.name}</div><div style={{textAlign:"center",fontSize:13,color:"#8a7d65",marginBottom:12}}>{fmtN(goalSaved(goalModal))} / {g?.target} zł</div><div className="pay-label">Чим платиш?</div><div className="tbtn-r"><button className={"tbtn"+(goalPay==="cash"?" on":"")} onClick={()=>setGoalPay("cash")}>💵 Готівка ({fmtN(cashBal)})</button><button className={"tbtn"+(goalPay==="card"?" on":"")} onClick={()=>setGoalPay("card")}>💳 Карта ({fmtN(cardBal)})</button></div><input type="text" inputMode="decimal" placeholder="Сума" value={goalAmt} onChange={e=>setGoalAmt(e.target.value)} className="modal-i" autoFocus/><div className="qk-r">{[100,200,400,g?.target].filter(Boolean).map(a=><button key={a} className="qk" onClick={()=>setGoalAmt(String(a))}>{a}</button>)}</div><button className="modal-s orange" onClick={allocateGoal} disabled={!goalAmt}>🎯 Поповнити ціль</button></>);})()}</div></div>}
