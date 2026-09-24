@@ -6,6 +6,15 @@
 
 create extension if not exists pgcrypto with schema extensions;
 
+-- 0. Таблиця з даними застосунку (якщо її ще немає)
+create table if not exists public.arkad (
+  id text primary key,
+  data jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+insert into public.arkad (id, data) values ('main', '{}'::jsonb)
+on conflict (id) do nothing;
+
 -- 1. Секретна таблиця з хешем PIN. RLS увімкнено і політик немає → через API її не прочитати.
 create table if not exists public.arkad_secret (
   id int primary key default 1 check (id = 1),
@@ -27,6 +36,7 @@ begin
     execute format('drop policy %I on public.arkad', p.policyname);
   end loop;
 end $$;
+grant select on public.arkad to anon, authenticated;
 create policy arkad_read on public.arkad for select to anon, authenticated using (true);
 revoke insert, update, delete, truncate on public.arkad from anon, authenticated;
 
