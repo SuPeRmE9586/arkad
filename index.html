@@ -131,6 +131,9 @@ body{background:#0f0d0a;color:#d4c9b0;font-family:system-ui,-apple-system,sans-s
 .wk.now{border-color:#F1C40F}
 .q-src{font-size:10px;color:#5a4d35;letter-spacing:1px;margin-top:10px}
 .q-prog{font-size:11px;color:#8a7d65}
+.bdg-u{color:#d4c9b0;border:1px solid #3d3520;cursor:pointer;font-family:inherit}
+.sal-edit{background:none;border:none;font-size:12px;cursor:pointer;padding:0 4px;opacity:.7}
+.chk{display:flex;align-items:center;gap:8px;font-size:13px;color:#8a7d65;margin-bottom:12px;cursor:pointer}
 .rbtn{margin-top:28px;padding:10px;background:transparent;color:#5a4d35;border:1px solid #222;border-radius:6px;font-size:12px;cursor:pointer;width:100%;font-family:inherit}
 .dd{background:#1a1612;border-radius:10px;padding:12px;border:1px solid #222}
 .pay-label{text-align:center;font-size:12px;color:#8a7d65;margin-bottom:4px}
@@ -242,12 +245,17 @@ function monthQuests(data,y,m,now){
     tenth:{done:inc>0&&saved>=tenthNeed,prog:inc>0?`${saved} / ${tenthNeed} zł`:"Ще немає доходу цього місяця"},
     weekly:{done:weeks.length>0&&weeks.every(w=>w.ok),prog:`${weeks.filter(w=>w.ok).length} / ${weeks.length} тижнів`,weeks},
     track:{done:days>=ACTIVE_DAYS,prog:`${days} / ${ACTIVE_DAYS} днів`},
-    live:{done:over&&inc-spent-saved>=0,prog:`${inc-spent-saved>=0?"✓":"✗"} залишок ${Math.round((inc-spent-saved)*100)/100} zł`+(over?"":" (перевірка в кінці місяця)")},
+    live:{done:over&&inc>0&&inc-spent-saved>=0,prog:`${inc-spent-saved>=0?"✓":"✗"} залишок ${Math.round((inc-spent-saved)*100)/100} zł`+(over?"":" (перевірка в кінці місяця)")},
   };
   const man=MANUAL_QUESTS[(y*12+m)%MANUAL_QUESTS.length];
   const claimed=(data.monthQ&&data.monthQ[monthKey(y,m)])||[];
-  const list=[...MONTH_QUESTS.map(q=>({...q,auto:true,...res[q.id]})),{...man,auto:false,done:claimed.includes(man.id),prog:"Відміть сам, коли виконаєш"}];
-  return list.map(q=>({...q,claimed:claimed.includes(q.id)}));
+  const list=[...MONTH_QUESTS.map(q=>({...q,auto:true,...res[q.id]})),{...man,auto:false,done:claimed.includes(man.id),prog:"Відміть сам, коли виконаєш"}].map(q=>({...q,claimed:claimed.includes(q.id)}));
+  // Власні квести: щомісячні повторюються, разові висять до виконання
+  const doneOnce=data.doneQ||[];
+  const custom=(data.customQ||[]).filter(c=>c.repeat||!doneOnce.includes(c.id)||claimed.includes(c.id)).map(c=>({...c,custom:true,auto:false,done:false,
+    src:c.repeat?"Мій квест · щомісяця":"Мій квест · разовий",prog:c.repeat?"щомісяця":"разовий",
+    claimed:c.repeat?claimed.includes(c.id):doneOnce.includes(c.id)}));
+  return [...list,...custom];
 }
 
 const LEVELS=[
@@ -269,7 +277,7 @@ function r2(n){return Math.round(n*100)/100;}
 function parseNum(s){if(!s)return 0;return parseFloat(s.replace(",","."))||0;}
 function fmtN(n){return Number.isInteger(n)?n.toString():n.toFixed(2);}
 
-const EMPTY={incomes:[],allocs:[],goalAllocs:[],goals:[],xp:0,doneQ:[],transfers:[],monthQ:{},v2:true};
+const EMPTY={incomes:[],allocs:[],goalAllocs:[],goals:[],xp:0,doneQ:[],transfers:[],monthQ:{},adjusts:[],customQ:[],v2:true};
 
 function App(){
   const[data,setData]=useState(null);
@@ -297,6 +305,12 @@ function App(){
   const[statMonth,setStatMonth]=useState(new Date().getMonth());
   const[questOpen,setQuestOpen]=useState(null);
   const[goalEdit,setGoalEdit]=useState(null);
+  const[balEdit,setBalEdit]=useState(null);
+  const[questEdit,setQuestEdit]=useState(null);
+  const[undoN,setUndoN]=useState(0);
+  const undoStack=useRef([]);
+  const prevData=useRef(null);
+  const undoing=useRef(false);
   const[showDone,setShowDone]=useState(false);
   const[pinModal,setPinModal]=useState(false);
   const[pinInput,setPinInput]=useState("");
@@ -332,6 +346,22 @@ function App(){
 
   useEffect(()=>{dataRef.current=data;},[data]);
 
+  // Історія змін для «Скасувати» (живе, поки відкрита вкладка)
+  useEffect(()=>{
+    if(!data)return;
+    if(prevData.current&&prevData.current!==data){
+      if(undoing.current)undoing.current=false;
+      else{undoStack.current.push(prevData.current);if(undoStack.current.length>30)undoStack.current.shift();}
+      setUndoN(undoStack.current.length);
+    }
+    prevData.current=data;
+  },[data]);
+
+  function undo(){
+    const prev=undoStack.current.pop();if(!prev)return;
+    undoing.current=true;setUndoN(undoStack.current.length);setData(prev);showT("↩ Скасовано");
+  }
+
   async function doSave(d){
     setSyncStatus("saving");
     const res=await dbSave(d,loadPin());
@@ -362,8 +392,9 @@ function App(){
   const allCC2=r2(allXfers.filter(t=>t.dir==="card2cash").reduce((s,t)=>s+t.amount,0));
   const totalCashInc=r2((data?data.incomes:[]).filter(i=>i.type==="cash").reduce((s,i)=>s+i.amount,0));
   const totalCardInc=r2((data?data.incomes:[]).filter(i=>i.type==="card").reduce((s,i)=>s+i.amount,0));
-  const cashBal=r2(totalCashInc-totalAllocFrom("cash")-allC2C+allCC2);
-  const cardBal=r2(totalCardInc-totalAllocFrom("card")+allC2C-allCC2);
+  const adjSum=(t)=>r2((data?data.adjusts||[]:[]).filter(a=>a.type===t).reduce((s,a)=>s+a.amount,0));
+  const cashBal=r2(totalCashInc-totalAllocFrom("cash")-allC2C+allCC2+adjSum("cash"));
+  const cardBal=r2(totalCardInc-totalAllocFrom("card")+allC2C-allCC2+adjSum("card"));
   const remaining=r2(cashBal+cardBal);
   function mInc(m){return r2((data?data.incomes:[]).filter(i=>{const d=new Date(i.date);return d.getMonth()===m&&d.getFullYear()===now.getFullYear();}).reduce((s,i)=>s+i.amount,0));}
   function mAllocs(m){return r2((data?data.allocs:[]).filter(a=>{const d=new Date(a.date);return d.getMonth()===m&&d.getFullYear()===now.getFullYear();}).reduce((s,a)=>s+a.amount,0));}
@@ -389,7 +420,7 @@ function App(){
     const emoji=e.emoji.trim()||"🎯";const deadline=e.deadline||null;
     setData(p=>{const gs=p.goals||[];
       if(e.id)return{...p,goals:gs.map(g=>g.id===e.id?{...g,name,emoji,target:r2(t),deadline}:g)};
-      return{...p,goals:[...gs,{id:"g"+Date.now(),name,emoji,target:r2(t),deadline,done:false,color:GOAL_COLORS[gs.length%GOAL_COLORS.length]}]};});
+      return{...p,goals:[...gs,{id:"g"+Date.now()+Math.random().toString(36).slice(2,6),name,emoji,target:r2(t),deadline,done:false,color:GOAL_COLORS[gs.length%GOAL_COLORS.length]}]};});
     setGoalEdit(null);showT(e.id?"✏️ Ціль оновлено":"🎯 Нова ціль!");
   }
   function deleteGoal(gid){
@@ -412,8 +443,25 @@ function App(){
   function delInc(id){setData(p=>({...p,incomes:p.incomes.filter(i=>i.id!==id)}));}
   function claimQuest(key,q){
     const cl=(data.monthQ&&data.monthQ[key])||[];if(cl.includes(q.id))return;
-    const nx=doXP(q.xp);setData(p=>({...p,monthQ:{...(p.monthQ||{}),[key]:[...(((p.monthQ||{})[key])||[]),q.id]},xp:nx}));showT("⚔️ +"+q.xp+" XP");
+    const once=q.custom&&!q.repeat;
+    const nx=doXP(q.xp);setData(p=>({...p,monthQ:{...(p.monthQ||{}),[key]:[...(((p.monthQ||{})[key])||[]),q.id]},doneQ:once?[...(p.doneQ||[]),q.id]:(p.doneQ||[]),xp:nx}));showT("⚔️ +"+q.xp+" XP");
   }
+  function saveBalance(){
+    const nc=parseNum(balEdit.cash),nk=parseNum(balEdit.card);
+    const add=[];const d=new Date().toISOString();
+    if(r2(nc-cashBal)!==0)add.push({id:Date.now(),type:"cash",amount:r2(nc-cashBal),date:d});
+    if(r2(nk-cardBal)!==0)add.push({id:Date.now()+1,type:"card",amount:r2(nk-cardBal),date:d});
+    if(add.length)setData(p=>({...p,adjusts:[...(p.adjusts||[]),...add]}));
+    setBalEdit(null);if(add.length)showT("✏️ Баланс виправлено");
+  }
+  function openQuestEdit(q){setQuestEdit(q?{id:q.id,title:q.title,desc:q.desc||"",xp:String(q.xp),repeat:!!q.repeat}:{id:null,title:"",desc:"",xp:"50",repeat:true});}
+  function saveQuest(){
+    const e=questEdit;const title=e.title.trim();if(!title)return;
+    const xp=Math.max(0,Math.round(parseNum(e.xp)))||0;const q={title,desc:e.desc.trim(),xp,repeat:e.repeat};
+    setData(p=>{const cs=p.customQ||[];return{...p,customQ:e.id?cs.map(c=>c.id===e.id?{...c,...q}:c):[...cs,{id:"c"+Date.now()+Math.random().toString(36).slice(2,6),...q}]};});
+    setQuestEdit(null);showT(e.id?"✏️ Квест оновлено":"⚔️ Новий квест!");
+  }
+  function deleteQuest(id){if(!confirm("Видалити квест?"))return;setData(p=>({...p,customQ:(p.customQ||[]).filter(c=>c.id!==id)}));setQuestEdit(null);}
   function resetAll(){if(confirm("Видалити ВСІ дані?")){setData({...EMPTY});}}
 
   const dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
@@ -454,7 +502,7 @@ function App(){
       {lvlUp&&<div className="lvl-o"><div className="lvl-i">{curLvl.ic}</div><div className="lvl-t">Новий рівень!</div><div className="lvl-n">{curLvl.title}</div></div>}
       {toast&&<div className="toast">{toast}</div>}
       <div className="hdr">
-        <div className="hdr-r"><div><div className="hdr-t">🏛️ Шлях Аркада</div><div className="hdr-s">{curLvl.ic} {curLvl.title}</div></div><div className="hdr-b"><span className="bdg bdg-f">🔥{streak}</span><span className="bdg bdg-g">{data.xp}xp</span></div></div>
+        <div className="hdr-r"><div><div className="hdr-t">🏛️ Шлях Аркада</div><div className="hdr-s">{curLvl.ic} {curLvl.title}</div></div><div className="hdr-b">{undoN>0&&<button className="bdg bdg-u" onClick={undo}>↩ Скасувати</button>}<span className="bdg bdg-f">🔥{streak}</span><span className="bdg bdg-g">{data.xp}xp</span></div></div>
         <div className="xp-bar"><div className="xp-fill" style={{width:xpPct+"%"}}/></div>
       </div>
 
@@ -465,9 +513,8 @@ function App(){
           </div>
           <div className="tip">📜 {tip}</div>
           <div className="sal">
-            <div className="sal-h"><span className="sal-l">Загальний баланс</span><span className="sal-d">Тиждень: {fmt(wS)}–{fmt(wE)}</span></div>
+            <div className="sal-h"><span className="sal-l">Загальний баланс<button className="sal-edit" onClick={()=>setBalEdit({cash:String(cashBal),card:String(cardBal)})}>✏️</button></span><span className="sal-d">Тиждень: {fmt(wS)}–{fmt(wE)}</span></div>
             <div className="sal-big" style={{color:remaining<0?"#FF6B6B":remaining===0?"#27AE60":"#F1C40F"}}>{fmtN(remaining)} zł</div>
-            <div className="sal-small">Отримано: {fmtN(totalIncome())} zł · Витрачено: {fmtN(totalAllocAll())} zł</div>
             <div className="sal-bk">
               <div className="sal-tp"><span>💵</span><span className="sal-tl">Готівка</span><span className="sal-ta" style={{color:cashBal<0?"#FF6B6B":"#d4c9b0"}}>{fmtN(cashBal)} zł</span></div>
               <div className="sal-tp"><span>💳</span><span className="sal-tl">Карта</span><span className="sal-ta" style={{color:cardBal<0?"#FF6B6B":"#d4c9b0"}}>{fmtN(cardBal)} zł</span></div>
@@ -511,7 +558,8 @@ function App(){
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}><div className="sec" style={{marginBottom:0}}>Квести на {MN[now.getMonth()].toLowerCase()}</div><span style={{color:"#8a7d65",fontSize:13}}>{curQ.filter(q=>q.claimed).length}/{curQ.length}</span></div>
           <div className="tip">📜 Сім ліків від порожнього гаманця Аркада. Нові квести щомісяця, прогрес рахується сам із твоїх записів.</div>
           {prevQ.length>0&&<div className="hist" style={{borderColor:"#3d3520"}}><div className="hist-t">🏺 Нагороди за {MN[prevM].toLowerCase()}</div>{prevQ.map(q=>(<div key={q.id} className="hist-r"><div><div style={{fontWeight:600,fontSize:13}}>{q.title}</div><div className="q-prog">{q.prog}</div></div><button className="goal-done-btn" onClick={()=>claimQuest(prevKey,q)}>+{q.xp} XP</button></div>))}</div>}
-          {curQ.map(q=>{const op=questOpen===q.id;const dn=q.claimed;return(<div key={q.id} className="qcard"><div className="qm" onClick={()=>setQuestOpen(op?null:q.id)}><div style={{display:"flex",alignItems:"center",gap:10}}><div className={"qch"+(dn?" done":"")}>{dn?"✓":q.done?"!":""}</div><div><div style={{fontWeight:600,fontSize:14,opacity:dn?.5:1,textDecoration:dn?"line-through":"none"}}>{q.title}</div><div style={{fontSize:11}}><span style={{color:"#F1C40F"}}>+{q.xp} XP</span>{!dn&&<span className="q-prog"> · {q.prog}</span>}</div></div></div><span style={{color:"#5a4d35"}}>{op?"▲":"▼"}</span></div>{op&&<div style={{padding:"0 14px 14px",borderTop:"1px solid #222"}}><div className="q-src">{q.src.toUpperCase()}</div><div style={{color:"#8a7d65",fontSize:13,marginTop:6,lineHeight:1.5}}>{q.desc}</div>{q.weeks&&<div className="wk-r">{q.weeks.map((w,i)=>(<div key={i} className={"wk"+(w.ok?" ok":"")+(w.now?" now":"")}>{fmt(w.st)}<br/>{fmtN(w.amt)} zł</div>))}</div>}{!dn&&(q.auto?(q.done&&<button className="qbtn" onClick={()=>claimQuest(curKey,q)}>🏆 Забрати +{q.xp} XP</button>):<button className="qbtn" onClick={()=>claimQuest(curKey,q)}>✓ Виконано!</button>)}</div>}</div>);})}
+          {curQ.map(q=>{const op=questOpen===q.id;const dn=q.claimed;return(<div key={q.id} className="qcard"><div className="qm" onClick={()=>setQuestOpen(op?null:q.id)}><div style={{display:"flex",alignItems:"center",gap:10}}><div className={"qch"+(dn?" done":"")}>{dn?"✓":q.done?"!":""}</div><div><div style={{fontWeight:600,fontSize:14,opacity:dn?.5:1,textDecoration:dn?"line-through":"none"}}>{q.title}</div><div style={{fontSize:11}}><span style={{color:"#F1C40F"}}>+{q.xp} XP</span>{!dn&&<span className="q-prog"> · {q.prog}</span>}</div></div></div><span style={{color:"#5a4d35"}}>{op?"▲":"▼"}</span></div>{op&&<div style={{padding:"0 14px 14px",borderTop:"1px solid #222"}}><div className="q-src">{q.src.toUpperCase()}</div><div style={{color:"#8a7d65",fontSize:13,marginTop:6,lineHeight:1.5}}>{q.desc}</div>{q.weeks&&<div className="wk-r">{q.weeks.map((w,i)=>(<div key={i} className={"wk"+(w.ok?" ok":"")+(w.now?" now":"")}>{fmt(w.st)}<br/>{fmtN(w.amt)} zł</div>))}</div>}{!dn&&(q.auto?(q.done&&<button className="qbtn" onClick={()=>claimQuest(curKey,q)}>🏆 Забрати +{q.xp} XP</button>):<button className="qbtn" onClick={()=>claimQuest(curKey,q)}>✓ Виконано!</button>)}{q.custom&&<button className="goal-btn" style={{width:"100%",marginTop:8,color:"#8a7d65"}} onClick={()=>openQuestEdit(q)}>✏️ Змінити / видалити</button>}</div>}</div>);})}
+          <button className="btn-add" style={{width:"100%",marginTop:8}} onClick={()=>openQuestEdit(null)}>+ Свій квест</button>
           <button className="rbtn" onClick={resetAll}>Скинути всі дані</button>
         </>}
       </div>
@@ -522,6 +570,20 @@ function App(){
         <div className="lbl">Дедлайн (необовʼязково)</div><input type="date" value={goalEdit.deadline} onChange={e=>setGoalEdit({...goalEdit,deadline:e.target.value})} className="modal-i2" style={{colorScheme:"dark"}}/>
         <button className="modal-s orange" onClick={saveGoal} disabled={!goalEdit.name.trim()||!(parseNum(goalEdit.target)>0)}>{goalEdit.id?"Зберегти":"🎯 Додати ціль"}</button>
         {goalEdit.id&&<button className="btn-del" onClick={()=>deleteGoal(goalEdit.id)}>🗑️ Видалити ціль</button>}
+      </div></div>}
+      {balEdit&&<div className="modal" onClick={()=>setBalEdit(null)}><div className="modal-c" onClick={e=>e.stopPropagation()}><div className="modal-t">Скільки в тебе зараз?</div>
+        <div style={{textAlign:"center",fontSize:12,color:"#8a7d65",marginBottom:12}}>Впиши реальні суми, різниця запишеться як виправлення</div>
+        <div className="lbl">💵 Готівка, zł</div><input type="text" inputMode="decimal" value={balEdit.cash} onChange={e=>setBalEdit({...balEdit,cash:e.target.value})} className="modal-i"/>
+        <div className="lbl">💳 Карта, zł</div><input type="text" inputMode="decimal" value={balEdit.card} onChange={e=>setBalEdit({...balEdit,card:e.target.value})} className="modal-i"/>
+        <button className="modal-s" onClick={saveBalance}>Зберегти</button>
+      </div></div>}
+      {questEdit&&<div className="modal" onClick={()=>setQuestEdit(null)}><div className="modal-c" onClick={e=>e.stopPropagation()}><div className="modal-t">{questEdit.id?"Змінити квест":"Свій квест"}</div>
+        <div className="lbl">Назва</div><input type="text" placeholder="Напр. Не замовляти їжу 2 тижні" value={questEdit.title} onChange={e=>setQuestEdit({...questEdit,title:e.target.value})} className="modal-i2" autoFocus/>
+        <div className="lbl">Опис (необовʼязково)</div><input type="text" value={questEdit.desc} onChange={e=>setQuestEdit({...questEdit,desc:e.target.value})} className="modal-i2"/>
+        <div className="lbl">Нагорода, XP</div><input type="text" inputMode="numeric" value={questEdit.xp} onChange={e=>setQuestEdit({...questEdit,xp:e.target.value})} className="modal-i2"/>
+        <div className="tbtn-r"><button className={"tbtn"+(questEdit.repeat?" on":"")} onClick={()=>setQuestEdit({...questEdit,repeat:true})}>🔁 Щомісяця</button><button className={"tbtn"+(!questEdit.repeat?" on":"")} onClick={()=>setQuestEdit({...questEdit,repeat:false})}>1️⃣ Разовий</button></div>
+        <button className="modal-s" onClick={saveQuest} disabled={!questEdit.title.trim()}>{questEdit.id?"Зберегти":"⚔️ Додати квест"}</button>
+        {questEdit.id&&<button className="btn-del" onClick={()=>deleteQuest(questEdit.id)}>🗑️ Видалити квест</button>}
       </div></div>}
       {pinModal&&<div className="modal" onClick={()=>setPinModal(false)}><div className="modal-c" onClick={e=>e.stopPropagation()}><div className="modal-t">🔒 PIN для збереження</div><div style={{textAlign:"center",fontSize:12,color:"#8a7d65",marginBottom:12}}>Вводиться один раз на цьому пристрої</div><input type="password" placeholder="PIN" value={pinInput} onChange={e=>setPinInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")submitPin();}} className="modal-i" autoFocus/><button className="modal-s" onClick={submitPin} disabled={!pinInput.trim()}>Зберегти</button></div></div>}
       {incModal&&<div className="modal" onClick={()=>setIncModal(false)}><div className="modal-c" onClick={e=>e.stopPropagation()}><div className="modal-t">Додати дохід</div><div className="tbtn-r">{[{id:"cash",l:"💵 Готівка"},{id:"card",l:"💳 Карта"}].map(t=><button key={t.id} className={"tbtn"+(incType===t.id?" on":"")} onClick={()=>setIncType(t.id)}>{t.l}</button>)}</div><input type="text" inputMode="decimal" placeholder="Сума" value={incAmt} onChange={e=>setIncAmt(e.target.value)} className="modal-i" autoFocus/><div className="qk-r">{[100,200,500,1000,1300,1500].map(a=><button key={a} className="qk" onClick={()=>setIncAmt(String(a))}>{a}</button>)}</div><button className="modal-s" onClick={addIncome} disabled={!incAmt}>Додати</button></div></div>}
