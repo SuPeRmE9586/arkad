@@ -2,13 +2,24 @@
 <html lang="uk">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Шлях Аркада</title>
+<meta name="description" content="Гейміфікований фінансовий трекер за принципами «Найбагатшої людини у Вавилоні»">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f0d0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Аркад">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="apple-touch-icon" sizes="152x152" href="icons/apple-touch-icon-152.png">
+<link rel="apple-touch-icon" sizes="167x167" href="icons/apple-touch-icon-167.png">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#0f0d0a;color:#d4c9b0;font-family:system-ui,-apple-system,sans-serif;min-height:100vh;-webkit-tap-highlight-color:transparent}
-.app{max-width:440px;margin:0 auto;padding-bottom:68px;min-height:100vh}
-.hdr{padding:14px 14px 8px;background:#14110e;border-bottom:1px solid #222;position:sticky;top:0;z-index:100}
+.app{max-width:440px;margin:0 auto;padding-bottom:calc(68px + env(safe-area-inset-bottom));min-height:100vh}
+.hdr{padding:calc(14px + env(safe-area-inset-top)) 14px 8px;background:#14110e;border-bottom:1px solid #222;position:sticky;top:0;z-index:100}
 .hdr-r{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}
 .hdr-t{font-size:16px;font-weight:800;color:#F1C40F}
 .hdr-s{font-size:11px;color:#6b6155;margin-top:1px}
@@ -77,7 +88,7 @@ body{background:#0f0d0a;color:#d4c9b0;font-family:system-ui,-apple-system,sans-s
 .tbtn.on{background:#222;color:#F1C40F;border-color:#F1C40F}
 .qk-r{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .qk{padding:6px 12px;font-size:13px;background:#222;color:#8a7d65;border:none;border-radius:16px;cursor:pointer}
-.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:440px;display:flex;background:#0f0d0a;border-top:1px solid #222;z-index:100}
+.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:440px;display:flex;background:#0f0d0a;border-top:1px solid #222;z-index:100;padding-bottom:env(safe-area-inset-bottom)}
 .nav-b{flex:1;padding:7px 0;text-align:center;background:transparent;border:none;color:#5a4d35;cursor:pointer;font-family:inherit}
 .nav-b.on{background:#1a1612;color:#F1C40F}
 .nav-ic{font-size:18px}.nav-lb{font-size:9px;margin-top:2px}
@@ -623,6 +634,11 @@ function App(){
   );
 }
 ReactDOM.render(<App/>,document.getElementById("root"));
+</script>
+<script>
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{});});
+}
 </script>
 </body>
 </html>
