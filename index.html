@@ -404,6 +404,9 @@ function App(){
   }
 
   const now=new Date();
+  // Різниця в календарних днях (а не "до кінця доби") — 16 липня при будь-якій
+  // годині сьогодні завжди показує однакове число днів, без плутанини
+  function daysUntil(dateStr){const d=new Date(dateStr+"T00:00:00");const n=new Date(now.getFullYear(),now.getMonth(),now.getDate());return Math.round((d-n)/86400000);}
   const wS=mon(now);
   const wE=sun(now);
 
@@ -478,7 +481,7 @@ function App(){
   }
   function goalDeadline(g){
     if(!g.deadline)return null;
-    const dl=new Date(g.deadline+"T23:59:59");const days=Math.ceil((dl-now)/86400000);const left=r2(g.target-goalSaved(g.id));
+    const days=daysUntil(g.deadline);const left=r2(g.target-goalSaved(g.id));
     const dStr=new Date(g.deadline).toLocaleDateString("uk-UA",{day:"numeric",month:"short",year:"numeric"});
     if(left<=0)return{late:false,t:`📅 до ${dStr} · зібрано!`};
     if(days<=0)return{late:true,t:`⏰ Дедлайн ${dStr} минув · бракує ${fmtN(left)} zł`};
@@ -499,7 +502,7 @@ function App(){
   function deleteBill(id){if(!confirm("Видалити платіж?"))return;setData(p=>({...p,bills:(p.bills||[]).filter(b=>b.id!==id)}));setBillEdit(null);}
   function billDeadline(b){
     if(!b.dueDate)return null;
-    const dl=new Date(b.dueDate+"T23:59:59");const days=Math.ceil((dl-now)/86400000);
+    const days=daysUntil(b.dueDate);
     const dStr=new Date(b.dueDate).toLocaleDateString("uk-UA",{day:"numeric",month:"short"});
     if(days<0)return{late:true,t:`⏰ Прострочено на ${-days} дн. (${dStr})`};
     if(days===0)return{late:true,t:"⏰ Сьогодні"};
