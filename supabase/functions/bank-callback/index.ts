@@ -102,6 +102,7 @@ Deno.serve(async (req: Request) => {
       headers: { ...CORS, "Content-Type": "application/json" },
     });
   } catch (e) {
+    console.error("bank-callback error:", e);
     return new Response(JSON.stringify({ error: String((e as Error)?.message || e) }), {
       status: 500,
       headers: { ...CORS, "Content-Type": "application/json" },
