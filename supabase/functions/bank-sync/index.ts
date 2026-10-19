@@ -65,7 +65,13 @@ function pickAmount(obj: any): number | null {
   const raw = cand?.amount ?? cand?.value;
   if (raw == null) return null;
   const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
+  if (!Number.isFinite(n)) return null;
+  // Berlin Group APIs send the amount unsigned and the direction in a
+  // separate field — without this, every transaction looked like income.
+  const indicator = (obj?.credit_debit_indicator ?? obj?.creditDebitIndicator ?? "").toString().toUpperCase();
+  if (indicator === "DBIT") return -Math.abs(n);
+  if (indicator === "CRDT") return Math.abs(n);
+  return n;
 }
 function pickName(obj: any): string {
   return (
