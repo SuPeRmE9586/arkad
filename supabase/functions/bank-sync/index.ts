@@ -111,17 +111,21 @@ Deno.serve(async (req: Request) => {
     let balance: number | null = null;
     if (balRes.ok) {
       const balJson = await balRes.json();
+      console.log("bank-sync raw balances response:", JSON.stringify(balJson));
       const first = balJson?.balances?.[0];
       balance = pickAmount(first);
     } else {
       console.error("bank-sync balances fetch failed:", await balRes.text());
     }
 
-    const txRes = await fetch(`https://api.enablebanking.com/accounts/${accountUid}/transactions`, {
-      headers: { Authorization: `Bearer ${jwt}` },
-    });
+    const dateFrom = new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
+    const txRes = await fetch(
+      `https://api.enablebanking.com/accounts/${accountUid}/transactions?date_from=${dateFrom}`,
+      { headers: { Authorization: `Bearer ${jwt}` } },
+    );
     if (!txRes.ok) throw new Error("transactions fetch failed: " + (await txRes.text()));
     const txJson = await txRes.json();
+    console.log("bank-sync transactions response keys:", Object.keys(txJson ?? {}), "count:", (txJson?.transactions ?? []).length);
     const txs = txJson?.transactions ?? [];
     console.log("bank-sync raw transaction sample:", JSON.stringify(txs[0] ?? null));
 
