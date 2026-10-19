@@ -630,6 +630,18 @@ function App(){
               <button className="btn-xfer" onClick={()=>setXferModal(true)}>↔ Переказ</button>
             </div>
           </div>
+          {sortedBills.filter(b=>b.dueDate&&daysUntil(b.dueDate)<=7).length>0&&<div style={{marginBottom:14}}>
+            <div className="j-title">Платежі цього тижня</div>
+            {sortedBills.filter(b=>b.dueDate&&daysUntil(b.dueDate)<=7).map(b=>{const dl=billDeadline(b);return(
+              <div key={b.id} style={{background:"#1a1612",border:"1px solid #2d1f0a",borderRadius:10,padding:"10px 12px",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.recurring?"🔁 ":""}{b.name}</div>
+                  {dl&&<div className={"goal-dl"+(dl.late?" late":"")} style={{marginBottom:0}}>{dl.t}</div>}
+                </div>
+                <button className="goal-done-btn" style={{flexShrink:0}} onClick={()=>{setBillPay(b.id);setBillPayAmt(b.amount!=null?String(b.amount):"");setBillPayFrom("cash");}}>✓ Оплатити</button>
+              </div>
+            );})}
+          </div>}
           <div className="j-title">Банки</div>
           <button className="j-card" style={{width:"100%",marginBottom:8,borderColor:"#3d3520",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",textAlign:"left"}} onClick={()=>{setJarModal("save");setJarAmt("");setJarCom("");setJarPay("cash");}}><div className="j-em">🏺</div><div style={{flex:1}}><div className="j-nm" style={{margin:0}}>Скарбничка</div><div style={{fontSize:11,color:"#6b6155"}}>цього тижня +{fmtN(wAll("save"))} zł</div></div><div className="j-am" style={{color:"#F1C40F"}}>{fmtN(saveTotal)} zł</div><span className="j-hb" onClick={e=>{e.stopPropagation();setJarHist(jarHist==="save"?null:"save");}}>📋</span></button>
           <div className="j-grid">{JARS.map(j=>{const sp=wAll(j.id);return(<button key={j.id} className="j-card" onClick={()=>{setJarModal(j.id);setJarAmt("");setJarCom("");setJarPay("cash");}}><div className="j-em">{j.emoji}</div><div className="j-nm">{j.name}</div><div className="j-am" style={{color:j.color}}>{fmtN(sp)} zł</div><span className="j-hb" onClick={e=>{e.stopPropagation();setJarHist(jarHist===j.id?null:j.id);}}>📋</span></button>);})}</div>
@@ -653,10 +665,8 @@ function App(){
           {JARS.map(j=>{const m=mAllocsJar(j.id,statMonth);const details=mAllocsDetail(j.id,statMonth);const isOpen=openCat===j.id;return(<div key={j.id}><div className="cat-row" onClick={()=>setOpenCat(isOpen?null:j.id)}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:14}}>{j.emoji} {j.name} <span style={{fontSize:11,color:"#5a4d35"}}>{isOpen?"▲":"▼"}</span></span><span style={{color:j.color,fontSize:14,fontWeight:700}}>{fmtN(m)} zł</span></div><div className="mb"><div className="mbf" style={{width:Math.min(m/100*10,100)+"%",backgroundColor:j.color}}/></div></div>{isOpen&&<div className="cat-detail">{details.length===0?<div className="emp">Немає записів</div>:details.map(a=>(<div key={a.id} className="cat-detail-r"><div><div style={{fontSize:13,fontWeight:600}}>{a.payFrom==="cash"?"💵":"💳"} {fmtN(a.amount)} zł</div>{a.comment&&<div style={{fontSize:11,color:"#8a7d65",marginTop:2}}>{a.comment}</div>}<div style={{fontSize:10,color:"#5a4d35",marginTop:2}}>{new Date(a.date).toLocaleDateString("uk-UA",{day:"numeric",month:"long"})}</div></div><button className="del" onClick={()=>delAlloc(a.id)}>🗑️</button></div>))}</div>}</div>);})}
           <div className="sec" style={{marginTop:16}}>Цілі — загальний прогрес</div>
           {goals.map(g=>{const saved=goalSaved(g.id);const pct=g.target>0?Math.min((saved/g.target)*100,100):0;return(<div key={g.id} style={{marginBottom:10,padding:"10px 12px",background:"#1a1612",borderRadius:10,border:"1px solid #222"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13}}>{g.emoji} {g.name} {g.done?"✅":""}</span><span style={{color:g.color,fontWeight:700,fontSize:13}}>{fmtN(saved)} / {g.target} zł</span></div><div className="mb"><div className="mbf" style={{width:pct+"%",backgroundColor:g.color}}/></div></div>);})}
-        </>}
 
-        {tab==="cal"&&<>
-          <div className="cal-t">{MN[now.getMonth()]} {now.getFullYear()}</div>
+          <div className="sec" style={{marginTop:16}}>{MN[now.getMonth()]} — календар</div>
           <div className="cal-g">{DN.map(d=><div key={d} className="cal-dn">{d}</div>)}{Array(af).fill(null).map((_,i)=><div key={"e"+i}/>)}{Array(dim).fill(null).map((_,i)=>{const d=i+1;const t=dayT(d);const isT=d===now.getDate();const has=dayA(d).length>0;return<button key={d} className={"cal-d"+(isT?" today":"")+(has?" has":"")+(selDay===d?" sel":"")} onClick={()=>setSelDay(selDay===d?null:d)}><div style={{fontSize:13,fontWeight:600}}>{d}</div>{has&&<div style={{fontSize:9,color:"#27AE60",fontWeight:700}}>{fmtN(t)}</div>}</button>;})}</div>
           {selDay&&<div className="dd"><div style={{color:"#F1C40F",fontWeight:700,marginBottom:8}}>{selDay} {MN[now.getMonth()]}</div>{dayA(selDay).length===0?<div className="emp">Немає записів</div>:dayA(selDay).map(a=>{const j=ALL_JARS.find(x=>x.id===a.jarId);return(<div key={a.id} className="hist-r"><div><span>{j?.emoji}</span> <span style={{fontWeight:600}}>{a.payFrom==="cash"?"💵":"💳"} {fmtN(a.amount)} zł</span>{a.comment&&<span style={{color:"#5a4d35",marginLeft:8,fontSize:12}}>— {a.comment}</span>}</div><button className="del" onClick={()=>delAlloc(a.id)}>🗑️</button></div>);})}</div>}
         </>}
@@ -672,7 +682,7 @@ function App(){
         </>}
 
         {tab==="bills"&&<>
-          <div className="tip">📜 Таблички боргів — запиши, що маєш заплатити, і Аркад нагадає, коли час.</div>
+          <div className="tip">📜 Твої платежі — разові й щомісячні.</div>
           {sortedBills.length===0&&<div className="emp">Поки немає запланованих платежів. Додай нижче 👇</div>}
           {sortedBills.map(b=>{
             const dl=billDeadline(b);const jar=ALL_JARS.find(j=>j.id===b.jarId);
@@ -718,7 +728,11 @@ function App(){
       {billEdit&&<div className="modal" onClick={()=>setBillEdit(null)}><div className="modal-c" onClick={e=>e.stopPropagation()}><div className="modal-t">{billEdit.id?"Змінити платіж":"Новий платіж"}</div>
         <div className="lbl">Назва</div><input type="text" placeholder="Напр. Оренда, Електрика, Кросівки" value={billEdit.name} onChange={e=>setBillEdit({...billEdit,name:e.target.value})} className="modal-i2" autoFocus/>
         <div className="lbl">Сума (необовʼязково — лиши пустим, якщо щоразу інша)</div><input type="text" inputMode="decimal" placeholder="Напр. 2650" value={billEdit.amount} onChange={e=>setBillEdit({...billEdit,amount:e.target.value})} className="modal-i2"/>
-        <div className="lbl">Дедлайн (необовʼязково)</div><input type="date" value={billEdit.dueDate} onChange={e=>setBillEdit({...billEdit,dueDate:e.target.value})} className="modal-i2" style={{colorScheme:"dark"}}/>
+        <div className="lbl">Дедлайн (необовʼязково)</div>
+        <div style={{display:"flex",gap:8,marginBottom:12}}>
+          <input type="date" value={billEdit.dueDate} onChange={e=>setBillEdit({...billEdit,dueDate:e.target.value})} className="modal-i2" style={{colorScheme:"dark",marginBottom:0}}/>
+          {billEdit.dueDate&&<button type="button" className="tbtn" style={{flex:"0 0 auto",padding:"0 14px"}} onClick={()=>setBillEdit({...billEdit,dueDate:""})}>✕</button>}
+        </div>
         <div className="tbtn-r"><button className={"tbtn"+(billEdit.recurring?" on":"")} onClick={()=>setBillEdit({...billEdit,recurring:true})}>🔁 Повторюється</button><button className={"tbtn"+(!billEdit.recurring?" on":"")} onClick={()=>setBillEdit({...billEdit,recurring:false})}>1️⃣ Разово</button></div>
         <div className="lbl">З якої банки?</div><div className="tbtn-r" style={{flexWrap:"wrap"}}>{JARS.map(j=><button key={j.id} className={"tbtn"+(billEdit.jarId===j.id?" on":"")} style={{minWidth:"45%"}} onClick={()=>setBillEdit({...billEdit,jarId:j.id})}>{j.emoji} {j.name}</button>)}</div>
         <button className="modal-s orange" onClick={saveBill} disabled={!billEdit.name.trim()}>{billEdit.id?"Зберегти":"📜 Додати платіж"}</button>
@@ -726,7 +740,7 @@ function App(){
       </div></div>}
       {billPay&&<div className="modal" onClick={()=>setBillPay(null)}><div className="modal-c" onClick={e=>e.stopPropagation()}>{(()=>{const b=(data.bills||[]).find(x=>x.id===billPay);return(<><div style={{fontSize:36,textAlign:"center"}}>{b?.recurring?"🔁":"📜"}</div><div className="modal-t">{b?.name}</div><div className="pay-label">Чим платиш?</div><div className="tbtn-r"><button className={"tbtn"+(billPayFrom==="cash"?" on":"")} onClick={()=>setBillPayFrom("cash")}>💵 Готівка ({fmtN(cashBal)})</button><button className={"tbtn"+(billPayFrom==="card"?" on":"")} onClick={()=>setBillPayFrom("card")}>💳 Карта ({fmtN(cardBal)})</button></div><input type="text" inputMode="decimal" placeholder="Сума" value={billPayAmt} onChange={e=>setBillPayAmt(e.target.value)} className="modal-i" autoFocus/><button className="modal-s orange" onClick={payBill} disabled={!billPayAmt}>✓ Оплатити</button></>);})()}</div></div>}
 
-      <div className="nav">{[{id:"main",ic:"🏛️",lb:"Банки"},{id:"bills",ic:"📜",lb:"Платежі"},{id:"stats",ic:"📊",lb:"Статі"},{id:"cal",ic:"📅",lb:"Календар"},{id:"quests",ic:"⚔️",lb:"Квести"}].map(t=><button key={t.id} className={"nav-b"+(tab===t.id?" on":"")} onClick={()=>{setTab(t.id);setJarHist(null);setSelDay(null);setOpenCat(null);}}><div className="nav-ic">{t.ic}</div><div className="nav-lb">{t.lb}</div></button>)}</div>
+      <div className="nav">{[{id:"main",ic:"🏛️",lb:"Банки"},{id:"bills",ic:"📜",lb:"Платежі"},{id:"stats",ic:"📊",lb:"Звіт"},{id:"quests",ic:"⚔️",lb:"Квести"}].map(t=><button key={t.id} className={"nav-b"+(tab===t.id?" on":"")} onClick={()=>{setTab(t.id);setJarHist(null);setSelDay(null);setOpenCat(null);}}><div className="nav-ic">{t.ic}</div><div className="nav-lb">{t.lb}</div></button>)}</div>
     </div>
   );
 }
