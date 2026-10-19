@@ -334,6 +334,9 @@ function App(){
   const[billPay,setBillPay]=useState(null);
   const[billPayAmt,setBillPayAmt]=useState("");
   const[billPayFrom,setBillPayFrom]=useState("cash");
+  const[bankPending,setBankPending]=useState([]);
+  const[bankBalance,setBankBalance]=useState(null);
+  const[bankBalanceAt,setBankBalanceAt]=useState(null);
   const[undoN,setUndoN]=useState(0);
   const undoStack=useRef([]);
   const prevData=useRef(null);
@@ -398,9 +401,47 @@ function App(){
     window.history.replaceState({},"",window.location.pathname);
     fetch(`${SUPABASE_URL}/functions/v1/bank-callback`,{method:"POST",headers:{"Content-Type":"application/json",apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`},body:JSON.stringify({code})})
       .then(r=>r.json())
-      .then(j=>{if(j.ok)showT("🏦 Банк підключено!");else showT("❌ "+(j.error||"Не вдалось підключити банк"));})
+      .then(j=>{if(j.ok){showT("🏦 Банк підключено!");syncBank();}else showT("❌ "+(j.error||"Не вдалось підключити банк"));})
       .catch(()=>showT("❌ Не вдалось підключити банк"));
   },[]);
+
+  function fetchBankPending(){
+    fetch(`${SUPABASE_URL}/rest/v1/bank_pending?status=eq.pending&order=tx_date.desc&select=*`,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`}})
+      .then(r=>r.json()).then(j=>setBankPending(Array.isArray(j)?j:[])).catch(()=>{});
+  }
+  function fetchBankBalance(){
+    fetch(`${SUPABASE_URL}/rest/v1/bank_sessions?id=eq.main&select=balance,balance_updated_at`,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`}})
+      .then(r=>r.json()).then(j=>{setBankBalance(j[0]?.balance??null);setBankBalanceAt(j[0]?.balance_updated_at??null);}).catch(()=>{});
+  }
+  useEffect(()=>{fetchBankPending();fetchBankBalance();},[]);
+
+  async function syncBank(){
+    showT("⏳ Синхронізація з банком...");
+    try{
+      const r=await fetch(`${SUPABASE_URL}/functions/v1/bank-sync`,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`}});
+      const j=await r.json();
+      if(j.ok){showT(j.newCount>0?`✓ Нових транзакцій: ${j.newCount}`:"✓ Нічого нового");fetchBankPending();fetchBankBalance();}
+      else showT("❌ "+(j.error||"Помилка синхронізації"));
+    }catch(e){showT("❌ Помилка синхронізації");}
+  }
+  function confirmBankSpend(tx,jarId){
+    const nx=doXP(10);
+    setData(p=>({...p,allocs:[...p.allocs,{id:Date.now(),jarId,amount:r2(Math.abs(tx.amount)),comment:tx.name,payFrom:"card",date:new Date(tx.tx_date).toISOString()}],xp:nx}));
+    fetch(`${SUPABASE_URL}/rest/v1/bank_pending?id=eq.${tx.id}`,{method:"PATCH",headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({status:"confirmed"})}).catch(()=>{});
+    setBankPending(p=>p.filter(x=>x.id!==tx.id));
+    showT("✓ Записано: "+tx.name);
+  }
+  function confirmBankIncome(tx){
+    const nx=doXP(15);
+    setData(p=>({...p,incomes:[...p.incomes,{id:Date.now(),amount:r2(Math.abs(tx.amount)),type:"card",date:new Date(tx.tx_date).toISOString()}],xp:nx}));
+    fetch(`${SUPABASE_URL}/rest/v1/bank_pending?id=eq.${tx.id}`,{method:"PATCH",headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({status:"confirmed"})}).catch(()=>{});
+    setBankPending(p=>p.filter(x=>x.id!==tx.id));
+    showT("💰 Дохід записано");
+  }
+  function dismissBankTx(tx){
+    fetch(`${SUPABASE_URL}/rest/v1/bank_pending?id=eq.${tx.id}`,{method:"PATCH",headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({status:"dismissed"})}).catch(()=>{});
+    setBankPending(p=>p.filter(x=>x.id!==tx.id));
+  }
 
   async function doSave(d){
     setSyncStatus("saving");
@@ -694,14 +735,46 @@ function App(){
         </>}
 
         {tab==="bills"&&<>
-          <button className="btn-add" style={{width:"100%",marginBottom:12,color:"#3498DB",borderColor:"#1a3a52"}} onClick={async()=>{
-            showT("⏳ Зʼєднання з банком...");
-            try{
-              const r=await fetch(`${SUPABASE_URL}/functions/v1/bank-connect`,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`}});
-              const j=await r.json();
-              if(j.url)window.location.href=j.url;else showT("❌ "+(j.error||"Помилка"));
-            }catch(e){showT("❌ Помилка з'єднання");}
-          }}>🏦 Підключити банк (Pekao)</button>
+          {bankBalance!=null&&<div style={{background:"linear-gradient(135deg,#132233,#17140F)",border:"1px solid #1a3a52",borderRadius:14,padding:"12px 14px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:11,color:"#6b9ac4"}}>За даними банку (Pekao)</div>
+              <div style={{fontSize:20,fontWeight:800}}>{fmtN(bankBalance)} zł</div>
+              {bankBalanceAt&&<div style={{fontSize:10,color:"#5a4d35"}}>оновлено {new Date(bankBalanceAt).toLocaleString("uk-UA",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</div>}
+            </div>
+            <button className="goal-btn" style={{flex:"0 0 auto",color:"#3498DB"}} onClick={syncBank}>🔄 Оновити</button>
+          </div>}
+          <div className="btn-row" style={{marginBottom:12}}>
+            <button className="btn-add" style={{color:"#3498DB",borderColor:"#1a3a52"}} onClick={async()=>{
+              showT("⏳ Зʼєднання з банком...");
+              try{
+                const r=await fetch(`${SUPABASE_URL}/functions/v1/bank-connect`,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`}});
+                const j=await r.json();
+                if(j.url)window.location.href=j.url;else showT("❌ "+(j.error||"Помилка"));
+              }catch(e){showT("❌ Помилка з'єднання");}
+            }}>🏦 {bankBalance!=null?"Перепідключити":"Підключити банк (Pekao)"}</button>
+            {bankBalance==null&&<button className="btn-add" style={{color:"#3498DB",borderColor:"#1a3a52",flex:"0 0 auto"}} onClick={syncBank}>🔄</button>}
+          </div>
+
+          {bankPending.length>0&&<div style={{marginBottom:16}}>
+            <div className="j-title">Нові з банку ({bankPending.length})</div>
+            {bankPending.map(tx=>{
+              const isIncome=tx.amount>0;
+              return(<div key={tx.id} className="goal-card">
+                <div className="goal-header">
+                  <span className="goal-name">{tx.name}</span>
+                  <span style={{fontWeight:800,color:isIncome?"#4C8C6B":"#E07A6B"}}>{isIncome?"+":"−"}{fmtN(Math.abs(tx.amount))} zł</span>
+                </div>
+                <div style={{fontSize:11,color:"#6b6155",marginBottom:8}}>{new Date(tx.tx_date).toLocaleDateString("uk-UA",{day:"numeric",month:"short"})}</div>
+                {isIncome?
+                  <button className="goal-done-btn" style={{width:"100%"}} onClick={()=>confirmBankIncome(tx)}>💰 Записати як дохід</button>
+                :<>
+                  <div className="tbtn-r" style={{flexWrap:"wrap",marginBottom:8}}>{JARS.map(j=><button key={j.id} className="tbtn" onClick={()=>confirmBankSpend(tx,j.id)}>{j.emoji} {j.name}</button>)}</div>
+                </>}
+                <button className="goal-btn" style={{width:"100%",marginTop:8,color:"#6b6155"}} onClick={()=>dismissBankTx(tx)}>Пропустити</button>
+              </div>);
+            })}
+          </div>}
+
           <div className="tip">📜 Твої платежі — разові й щомісячні.</div>
           {sortedBills.length===0&&<div className="emp">Поки немає запланованих платежів. Додай нижче 👇</div>}
           {sortedBills.map(b=>{
