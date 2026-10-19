@@ -390,6 +390,18 @@ function App(){
     undoing.current=true;setUndoN(undoStack.current.length);setData(prev);showT("↩ Скасовано");
   }
 
+  // Повернення з Pekao після підтвердження доступу в Enable Banking
+  useEffect(()=>{
+    const params=new URLSearchParams(window.location.search);
+    const code=params.get("code");
+    if(!code)return;
+    window.history.replaceState({},"",window.location.pathname);
+    fetch(`${SUPABASE_URL}/functions/v1/bank-callback`,{method:"POST",headers:{"Content-Type":"application/json",apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`},body:JSON.stringify({code})})
+      .then(r=>r.json())
+      .then(j=>{if(j.ok)showT("🏦 Банк підключено!");else showT("❌ "+(j.error||"Не вдалось підключити банк"));})
+      .catch(()=>showT("❌ Не вдалось підключити банк"));
+  },[]);
+
   async function doSave(d){
     setSyncStatus("saving");
     const res=await dbSave(d,loadPin());
@@ -682,6 +694,14 @@ function App(){
         </>}
 
         {tab==="bills"&&<>
+          <button className="btn-add" style={{width:"100%",marginBottom:12,color:"#3498DB",borderColor:"#1a3a52"}} onClick={async()=>{
+            showT("⏳ Зʼєднання з банком...");
+            try{
+              const r=await fetch(`${SUPABASE_URL}/functions/v1/bank-connect`,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`}});
+              const j=await r.json();
+              if(j.url)window.location.href=j.url;else showT("❌ "+(j.error||"Помилка"));
+            }catch(e){showT("❌ Помилка з'єднання");}
+          }}>🏦 Підключити банк (Pekao)</button>
           <div className="tip">📜 Твої платежі — разові й щомісячні.</div>
           {sortedBills.length===0&&<div className="emp">Поки немає запланованих платежів. Додай нижче 👇</div>}
           {sortedBills.map(b=>{
