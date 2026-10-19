@@ -42,6 +42,25 @@ async function signJWT(key: CryptoKey): Promise<string> {
   return `${data}.${b64url(new Uint8Array(sig))}`;
 }
 
+// Newer Supabase projects no longer auto-populate SUPABASE_SERVICE_ROLE_KEY
+// (deprecated) — the replacement is SUPABASE_SECRET_KEYS, a JSON object of
+// secret keys. Support both so this keeps working either way.
+function getServiceKey(): string {
+  const direct = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (direct) return direct;
+  const dict = Deno.env.get("SUPABASE_SECRET_KEYS");
+  if (dict) {
+    try {
+      const parsed = JSON.parse(dict) as Record<string, string>;
+      const vals = Object.values(parsed);
+      if (vals.length > 0) return vals[0];
+    } catch (_e) {
+      // fall through to the error below
+    }
+  }
+  throw new Error("no SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEYS available");
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   try {
@@ -62,7 +81,7 @@ Deno.serve(async (req: Request) => {
     const session = await sessRes.json();
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const SERVICE_KEY = getServiceKey();
     const upsertRes = await fetch(`${SUPABASE_URL}/rest/v1/bank_sessions?id=eq.main`, {
       method: "PATCH",
       headers: {
